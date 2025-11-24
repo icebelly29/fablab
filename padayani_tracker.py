@@ -1,6 +1,8 @@
 """
-Padayani Eye Tracker Prototype (Webcam + Bench ROI Lock + Sitting Check)
-------------------------------------------------------------------------
+Padayani Eye Tracker
+--------------------
+
+This script is a configurable eye tracker for the Padayani performance.
 
 Requirements (inside your venv):
     pip install opencv-python numpy tensorflow
@@ -12,12 +14,15 @@ Model:
       movenet_multipose_lightning.tflite
 
 Behavior:
-    - Uses MoveNet MultiPose Lightning (17 keypoints, up to 6 people).
-    - Robust centroid tracker with smoothing.
-    - Bench ROI: first person who SITS in the ROI for N frames becomes LOCKED.
-    - Sitting is detected from keypoints (torso vs leg vertical ratio).
-    - Eyes ONLY follow the locked target until their track disappears.
-    - Three pairs of circular eyes; pupils move left/right based on locked target.
+    - Uses MoveNet MultiPose Lightning for pose estimation.
+    - Tracks multiple people with a robust centroid tracker.
+    - Defines a "bench ROI" region.
+    - A person in the ROI for a set number of frames becomes the LOCKED target.
+    - Optionally, can require the person to be SITTING to be locked.
+    - The eyes follow ONLY the locked target.
+
+Configuration:
+    - `USE_SITTING_DETECTION`: Set to True to require sitting, False otherwise.
 
 Keys:
     'q' or ESC -> quit
@@ -77,6 +82,11 @@ BENCH_ROI_Y_MAX_FRAC = 0.95
 
 # How many consecutive frames inside bench ROI & sitting before locking
 BENCH_LOCK_FRAMES = 10
+
+# --- Sitting Detection ---
+# Enable this to require a person to be sitting to be locked.
+# If False, any person in the ROI can be locked.
+USE_SITTING_DETECTION = True
 
 # Sitting heuristic threshold: leg_vertical / torso_vertical < this => sitting
 SITTING_RATIO_THRESHOLD = 1.3
@@ -579,16 +589,26 @@ def main():
             locked_target_id = None
 
         if locked_target_id is None:
-            # We are free to lock a new person sitting on the bench
+            # We are free to lock a new person
             for tid, tr in tracks.items():
                 cx, cy = tr["centroid"]
                 inside = is_inside_roi(cx, cy, bench_roi)
-                sitting = is_sitting(tr)
 
-                if inside and sitting:
+                condition_met = False
+                if USE_SITTING_DETECTION:
+                    # Must be inside ROI and sitting
+                    sitting = is_sitting(tr)
+                    if inside and sitting:
+                        condition_met = True
+                else:
+                    # Must just be inside ROI
+                    if inside:
+                        condition_met = True
+
+                if condition_met:
                     bench_roi_counters[tid] = bench_roi_counters.get(tid, 0) + 1
                 else:
-                    # Decay or reset the counter when they move / stand up
+                    # Decay or reset the counter
                     bench_roi_counters[tid] = 0
 
             # Check if any track earned the lock
