@@ -8,6 +8,8 @@ __pycache__/
 env/
 venv/
 .venv/
+*venv/
+myenv/
 
 # Distribution and packaging
 .eggs/
@@ -29,3 +31,6 @@ wheels/
 
 # Logs
 logs/
+
+# Media files
+*.mp4
