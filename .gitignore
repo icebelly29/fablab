@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+*.pyl
+.Python
+env/
+venv/
+.venv/
+
+# Distribution and packaging
+.eggs/
+*.egg-info/
+dist/
+build/
+wheels/
+*.whl
+
+# IDEs and other tools
+.idea/
+.vscode/
+*.log
+*.sqlite
+.vs/
+
+# TensorFlow/MediaPipe models (if they are outputs or large binaries)
+*.tflite
+
+# Logs
+logs/

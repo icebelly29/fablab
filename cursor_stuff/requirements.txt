@@ -1,0 +1,19 @@
+# Padayani Eye Tracking Prototype - Python Dependencies
+# 
+# Installation:
+#   pip install -r requirements.txt
+
+# Core computer vision
+opencv-python>=4.5.0
+numpy<2.0
+
+# TensorFlow (includes TensorFlow Lite)
+tensorflow>=2.10.0
+
+# MediaPipe for face detection
+mediapipe>=0.10.0
+
+# ZED SDK Python bindings
+# Note: Requires ZED SDK to be installed separately from:
+# https://www.stereolabs.com/developers/release/
+pyzed>=4.0.0
