@@ -1,0 +1,29 @@
+name: Release CLI
+on:
+  release:
+    types: [created]
+
+jobs:
+  release:
+    name: release ${{ matrix.targets.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        targets:
+          [
+            { name: Windows, triple: x86_64-pc-windows-gnu, version: stable },
+            { name: Linux, triple: x86_64-unknown-linux-musl, version: stable },
+            # Fix for https://github.com/rust-build/rust-build.action/issues/88
+            { name: macOS, triple: x86_64-apple-darwin, version: '1.73.0' }
+          ]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and release
+        uses: rust-build/rust-build.action@v1.4.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUSTTARGET: ${{ matrix.targets.triple }}
+          TOOLCHAIN_VERSION: ${{ matrix.targets.version }}
+          EXTRA_FILES: "README.md LICENSE"
+          SRC_DIR: "cli/"

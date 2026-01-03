@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>G-Code Simulator (CNC Grade)</title>
+<style>
+body {
+  font-family: monospace;
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+}
+textarea {
+  width: 360px;
+  height: 520px;
+}
+canvas {
+  border: 1px solid #999;
+}
+button {
+  padding: 8px 14px;
+}
+</style>
+</head>
+<body>
+
+<textarea id="gcode"></textarea>
+
+<div>
+  <button onclick="simulate()">Run Simulation</button><br><br>
+  <canvas id="canvas" width="600" height="600"></canvas>
+</div>
+
+<script>
+const DEFAULT_FEED = 1000;
+const ARC_SEGMENTS = 48;
+
+function cleanLine(line) {
+  line = line.replace(/\(.*?\)/g, '');
+  line = line.split(';')[0];
+  return line.trim().toUpperCase();
+}
+
+function normalizeG(code) {
+  if (!code) return null;
+  if (code === 'G0' || code === 'G00') return 'G00';
+  if (code === 'G1' || code === 'G01') return 'G01';
+  if (code === 'G2' || code === 'G02') return 'G02';
+  if (code === 'G3' || code === 'G03') return 'G03';
+  return null;
+}
+
+function parseGCode(code) {
+  let x = 0, y = 0, z = 0;
+  let feed = DEFAULT_FEED;
+
+  const moves = [];
+
+  for (let raw of code.split('\n')) {
+    const line = cleanLine(raw);
+    if (!line) continue;
+
+    let motion = null;
+    let nx = x, ny = y, nz = z;
+    let r = null;
+    let nfeed = feed;
+
+    for (let p of line.split(/\s+/)) {
+      const g = normalizeG(p);
+      if (g) motion = g;
+
+      if (p.startsWith('X')) nx = parseFloat(p.slice(1));
+      if (p.startsWith('Y')) ny = parseFloat(p.slice(1));
+      if (p.startsWith('Z')) nz = parseFloat(p.slice(1));
+      if (p.startsWith('R')) r = parseFloat(p.slice(1));
+      if (p.startsWith('F')) nfeed = parseFloat(p.slice(1));
+    }
+
+    if (!motion) continue;
+
+    moves.push({
+      type: motion,
+      from: { x, y, z },
+      to: { x: nx, y: ny, z: nz },
+      feed: motion === 'G00' ? null : nfeed,
+      radius: r
+    });
+
+    x = nx; y = ny; z = nz;
+    if (motion !== 'G00') feed = nfeed;
+  }
+
+  return moves;
+}
+
+function bounds(moves) {
+  let xs=[], ys=[];
+  moves.forEach(m=>{
+    xs.push(m.from.x, m.to.x);
+    ys.push(m.from.y, m.to.y);
+  });
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys)
+  };
+}
+
+function simulate() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  const moves = parseGCode(document.getElementById('gcode').value);
+  if (!moves.length) return;
+
+  const b = bounds(moves);
+  const pad = 40;
+  const scale = Math.min(
+    (canvas.width - pad*2) / (b.maxX - b.minX || 1),
+    (canvas.height - pad*2) / (b.maxY - b.minY || 1)
+  );
+
+  const map = p => ({
+    x: (p.x - b.minX)*scale + pad,
+    y: canvas.height - ((p.y - b.minY)*scale + pad)
+  });
+
+  let i = 0;
+
+  function draw() {
+    if (i >= moves.length) return;
+    const m = moves[i];
+
+    const cutting = m.type !== 'G00' && (m.from.z <= 0 || m.to.z <= 0);
+
+    ctx.beginPath();
+    ctx.setLineDash(m.type === 'G00' ? [6,4] : []);
+    ctx.strokeStyle =
+      m.type === 'G00' ? '#888' :
+      m.type === 'G01' ? '#000' :
+      m.type === 'G02' ? '#d00' :
+      '#00a';
+
+    if (m.type === 'G02' || m.type === 'G03') {
+      const cw = m.type === 'G02';
+      const mx = (m.from.x + m.to.x)/2;
+      const my = (m.from.y + m.to.y)/2;
+      const dx = m.to.x - m.from.x;
+      const dy = m.to.y - m.from.y;
+      const d = Math.hypot(dx,dy);
+
+      if (!m.radius || d === 0) {
+        i++;
+        setTimeout(draw, 30);
+        return;
+      }
+
+      const h = Math.sqrt(Math.max(0, m.radius*m.radius - (d/2)*(d/2)));
+      const ox = -dy/d * h * (cw ? -1 : 1);
+      const oy = dx/d * h * (cw ? -1 : 1);
+      const cx = mx + ox;
+      const cy = my + oy;
+
+      const a0 = Math.atan2(m.from.y - cy, m.from.x - cx);
+      const a1 = Math.atan2(m.to.y - cy, m.to.x - cx);
+      let da = a1 - a0;
+
+      if (cw && da > 0) da -= Math.PI*2;
+      if (!cw && da < 0) da += Math.PI*2;
+
+      for (let s=0; s<=ARC_SEGMENTS; s++) {
+        const a = a0 + da*s/ARC_SEGMENTS;
+        const p = map({x: cx + Math.cos(a)*m.radius, y: cy + Math.sin(a)*m.radius});
+        if (s===0) ctx.moveTo(p.x,p.y);
+        else ctx.lineTo(p.x,p.y);
+      }
+    } else {
+      const p1 = map(m.from);
+      const p2 = map(m.to);
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+    }
+
+    ctx.stroke();
+
+    const dist = Math.hypot(m.to.x-m.from.x, m.to.y-m.from.y);
+    const delay = m.type === 'G00'
+      ? 30
+      : Math.max(30, (dist / m.feed) * 60000);
+
+    i++;
+    setTimeout(draw, delay);
+  }
+
+  draw();
+}
+</script>
+
+
+</body>
+</html>

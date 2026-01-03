@@ -1,0 +1,21 @@
+# This file was generated based on the Python scripts in the 'padayani' directory.
+# Note: Specific versions are not included. For a fully reproducible environment,
+# you may want to freeze your working virtual environment's versions using:
+# pip freeze > requirements.txt
+
+# Core computer vision and data manipulation library
+opencv-python
+
+# Used for array operations, often a dependency of other CV libraries
+numpy
+
+# For YOLOv8 object and pose detection models
+ultralytics
+
+# For ZED stereo camera integration (used in ZED-specific scripts)
+# This is often installed from a specific .whl file provided by Stereolabs
+pyzed
+
+# Used in some prototype scripts for alternative pose/face detection
+tensorflow
+mediapipe

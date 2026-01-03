@@ -1,0 +1,7 @@
+/target
+**/*.rs.bk
+./*.gcode
+pkg/
+dist
+lib/approx_circle.svg
+**/out
