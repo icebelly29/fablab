@@ -6,7 +6,7 @@
 
 // --- Configuration ---
 const char* ssid = "Cutter-Link";
-const char* password = "Qatar2026"; // Minimum 8 characters for WPA2!
+const char* password = "Qatar2026"; 
 const int dns_port = 53;
 const int ws_port = 81;
 
@@ -15,11 +15,46 @@ WebServer server(80);
 WebSocketsServer webSocket = WebSocketsServer(ws_port);
 
 void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
-  if(type == WStype_TEXT) {
-    String msg = "";
-    for(size_t i = 0; i < length; i++) msg += (char)payload[i];
-    Serial.println("Received: " + msg);
-    webSocket.sendTXT(num, "{\"type\":\"ack\"}");
+  switch(type) {
+    case WStype_DISCONNECTED:
+      Serial.printf("[%u] Disconnected!\n", num);
+      break;
+      
+    case WStype_CONNECTED:
+      {
+        IPAddress ip = webSocket.remoteIP(num);
+        Serial.printf("[%u] Connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
+        // Send initial status
+        webSocket.sendTXT(num, "{\"type\":\"serial\",\"data\":\"Connected to Cutter-Link Host\"}");
+      }
+      break;
+      
+    case WStype_TEXT:
+      {
+        String msg = "";
+        for(size_t i = 0; i < length; i++) msg += (char)payload[i];
+        
+        // Simple JSON Parsing for "data" field
+        // Expected: {"type":"gcode", "data":"G1 X..."}
+        if(msg.indexOf("\"type\":\"gcode\"") != -1) {
+            int dataStart = msg.indexOf("\"data\":\"");
+            if(dataStart != -1) {
+                dataStart += 8; // Skip "data":"
+                int dataEnd = msg.lastIndexOf("\"");
+                if(dataEnd > dataStart) {
+                    String gcode = msg.substring(dataStart, dataEnd);
+                    // Unescape if necessary (simple version)
+                    gcode.replace("\n", "\n");
+                    
+                    Serial.println(gcode); // Send to Machine
+                    
+                    // Acknowledge to UI
+                    webSocket.sendTXT(num, "{\"type\":\"ack\"}");
+                }
+            }
+        }
+      }
+      break;
   }
 }
 
@@ -76,6 +111,17 @@ void loop() {
   dnsServer.processNextRequest();
   server.handleClient();
   webSocket.loop();
+  
+  // Read from Machine (Serial) -> Send to UI (WebSocket)
+  if (Serial.available()) {
+      String line = Serial.readStringUntil('\n');
+      line.trim();
+      if(line.length() > 0) {
+          // Wrap in JSON
+          String json = "{\"type\":\"serial\",\"data\":\"" + line + "\"}";
+          webSocket.broadcastTXT(json);
+      }
+  }
   
   // Heartbeat blink
   static unsigned long lastBlink = 0;

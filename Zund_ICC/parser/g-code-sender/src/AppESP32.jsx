@@ -8,33 +8,58 @@ function AppESP32() {
   const [isConnected, setIsConnected] = useState(false);
   const [gcode, setGcode] = useState("G1 X10 Y10\nG1 Z5\nG1 X0 Y0"); // Default G-code for testing
   const [svgContent, setSvgContent] = useState(null);
-  const [status, setStatus] = useState("Connecting to Machine...");
+  const [logs, setLogs] = useState([]);
+  
+  // New UI states
+  const [activeTab, setActiveTab] = useState("gcode"); // 'gcode' | 'svg'
+  const [commandInput, setCommandInput] = useState("");
 
   const socketRef = useRef(null);
   const gcodeQueueRef = useRef([]);
   const fileInputRef = useRef(null);
   const svgFileInputRef = useRef(null);
+  const consoleEndRef = useRef(null);
 
-  // Auto-connect on mount
+  const addLog = (message, type = 'info') => {
+      setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), message, type }]);
+  };
+
   useEffect(() => {
+    // Auto-scroll console
+    consoleEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
+
+  useEffect(() => {
+    // Auto-connect on mount
     handleConnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
+    // Cleanup on unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
+    };
   }, []);
 
   const handleConnect = () => {
     if (isConnected || isConnecting) return;
-
+    
     setIsConnecting(true);
-    setStatus("Connecting to ESP32...");
+    addLog("Connecting to WebSocket bridge...", 'system');
 
-    // Determine host: if localhost, use localhost:81 (dev simulation), else use window.location.hostname
-    const host = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
-    const socket = new WebSocket(`ws://${host}:81`);
+    // Determine WebSocket URL based on environment
+    const hostname = window.location.hostname;
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+    const wsUrl = isLocal ? "ws://localhost:8080" : `ws://${hostname}:81`;
+    
+    addLog(`Attempting connection to: ${wsUrl}`, 'info');
+
+    const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
       setIsConnecting(false);
       setIsConnected(true);
-      setStatus("Connected to Machine (ESP32).");
+      addLog(`Connected to ${isLocal ? 'Bridge' : 'Machine'}.`, 'success');
       socketRef.current = socket;
     };
 
@@ -46,55 +71,53 @@ function AppESP32() {
             sendNextGcodeLine();
             break;
           case 'gcode-from-svg':
-             // NOTE: The ESP32 version does conversion in the BROWSER, so we don't expect this from server
-             // But if we kept logic symmetric, we might. 
-             // In this version, we do conversion locally.
+            setGcode(msg.data);
+            addLog("SVG converted successfully and loaded.", 'success');
             break;
           case 'serial':
             console.log("Message from ESP32:", msg.data);
-            setStatus(msg.data);
+            addLog(`ESP32: ${msg.data}`, 'rx');
             break;
           case 'error':
             console.error("Error from bridge:", msg.data);
-            setStatus(`Error: ${msg.data}`);
+            addLog(`Error: ${msg.data}`, 'error');
             break;
           default:
             console.log("Unknown message from server:", msg);
         }
       } catch (e) {
-        // If it's not JSON, treat as raw string (simple ESP32 debug)
-        console.log("Raw message:", event.data);
+        console.error("Invalid message from server:", event.data, e);
       }
     };
 
     socket.onclose = () => {
       setIsConnected(false);
-      setIsConnecting(false); // Reset connecting state
-      setStatus("Disconnected. Reconnecting in 3s...");
+      setIsConnecting(false);
+      addLog("Disconnected from WebSocket bridge.", 'warning');
       socketRef.current = null;
-      // Auto-reconnect
-      setTimeout(handleConnect, 3000);
     };
 
     socket.onerror = (error) => {
+      setIsConnecting(false);
+      setIsConnected(false);
+      addLog("Error: Could not connect to WebSocket bridge.", 'error');
       console.error("WebSocket error:", error);
-      // Let onclose handle the state reset
     };
   };
 
   const sendNextGcodeLine = () => {
     if (gcodeQueueRef.current.length > 0) {
       const line = gcodeQueueRef.current.shift();
-      setStatus(`Sending (${gcodeQueueRef.current.length} left): ${line}`);
+      addLog(`Sending (${gcodeQueueRef.current.length} left): ${line}`, 'tx');
       socketRef.current.send(JSON.stringify({ type: 'gcode', data: line }));
     } else {
-      setStatus("G-code sending complete.");
+      addLog("G-code sending complete.", 'success');
     }
   };
 
   const handleSend = () => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-      setStatus("Error: Not connected.");
+      addLog("Error: Not connected.", 'error');
       return;
     }
 
@@ -103,12 +126,31 @@ function AppESP32() {
       .filter((line) => line.trim().length > 0);
     
     if (gcodeLines.length === 0) {
-      setStatus("Nothing to send.");
+      addLog("Nothing to send.", 'warning');
       return;
     }
 
     gcodeQueueRef.current = gcodeLines;
     sendNextGcodeLine(); // Start the sending process
+  };
+  
+  const handleManualCommand = () => {
+    const cmd = commandInput.trim();
+    if (!cmd) return;
+
+    if (cmd.toLowerCase() === 'clear') {
+        setLogs([]);
+        setCommandInput("");
+        return;
+    }
+    
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+        addLog(`> ${cmd}`, 'tx'); // Echo command
+        socketRef.current.send(JSON.stringify({ type: 'gcode', data: cmd }));
+    } else {
+        addLog("Error: Not connected.", 'error');
+    }
+    setCommandInput("");
   };
 
   const handleFileChange = (event) => {
@@ -118,7 +160,8 @@ function AppESP32() {
       reader.onload = (e) => {
         setGcode(e.target.result);
         setSvgContent(null);
-        setStatus(`Loaded file: ${file.name}`);
+        setActiveTab("gcode");
+        addLog(`Loaded file: ${file.name}`, 'system');
       };
       reader.readAsText(file);
     }
@@ -135,9 +178,9 @@ function AppESP32() {
       reader.onload = (e) => {
         const content = e.target.result;
         setSvgContent(content);
+        setActiveTab("svg");
         try {
-          setStatus(`Converting SVG: ${file.name}...`);
-          // Client-side conversion!
+          addLog(`Converting SVG: ${file.name}...`, 'system');
           const converter = new SvgConverter({
             feedRate: 1000,
             safeZ: 5,
@@ -145,10 +188,10 @@ function AppESP32() {
           });
           const generatedGcode = converter.convert(content);
           setGcode(generatedGcode);
-          setStatus(`SVG converted successfully: ${file.name}`);
+          addLog(`SVG converted successfully: ${file.name}`, 'success');
         } catch (error) {
           console.error("SVG Conversion failed:", error);
-          setStatus(`Error converting SVG: ${error.message}`);
+          addLog(`Error converting SVG: ${error.message}`, 'error');
         }
       };
       reader.readAsText(file);
@@ -159,112 +202,141 @@ function AppESP32() {
     svgFileInputRef.current.click();
   };
 
+  // Status Pill Helpers
+  const getStatusText = () => {
+      if (isConnecting) return "Connecting...";
+      if (isConnected) return "Connected";
+      return "Disconnected";
+  };
+
   return (
     <div className="app-container">
       <header className="app-header">
-        <div className="logo">
-          <div className="logo-icon">📡</div>
-          <h1>Cutter (WiFi)</h1>
-        </div>
-        <div className="header-controls">
-           <div className={`status-badge ${isConnected ? 'connected' : 'disconnected'}`}>
-              <span className="status-dot"></span>
-              {isConnected ? "Connected" : "Reconnecting..."}
-           </div>
+        <h1 className="header-title">Cutter (WiFi)</h1>
+        <div 
+            className={`status-pill ${isConnected ? 'connected' : 'disconnected'}`}
+            onClick={!isConnected ? handleConnect : undefined}
+            title={!isConnected ? "Click to connect" : "Machine Connected"}
+            style={{ cursor: !isConnected ? 'pointer' : 'default' }}
+        >
+          <span className="status-dot"></span>
+          {getStatusText()}
         </div>
       </header>
 
-      <div className="status-bar">
-        <span className="status-label">STATUS:</span>
-        <span className="status-message">{status}</span>
-      </div>
-
-      <main className="workspace">
-        <div className="panel editor-panel">
-          <div className="panel-header">
-            <h2>G-Code Editor</h2>
-            <div className="panel-toolbar">
-               <button className="btn-secondary" onClick={triggerFileInput} title="Load .gcode file">
-                 📂 Load
-               </button>
-               <button className="btn-secondary" onClick={triggerSvgFileInput} title="Import .svg file">
-                 🎨 Import SVG
-               </button>
+      <main className="main-layout">
+        <div className="left-column">
+          {/* G-Code Editor Panel */}
+          <div className="panel editor-panel">
+            <div className="panel-header">
+              <h2>G-Code Editor</h2>
+              <div className="toolbar">
+                 <button className="btn-light" onClick={triggerFileInput}>Load</button>
+                 <button className="btn-light" onClick={triggerSvgFileInput}>Import SVG</button>
+              </div>
+            </div>
+            <div className="editor-content">
+              <textarea
+                className="code-editor"
+                value={gcode}
+                onChange={(e) => setGcode(e.target.value)}
+                spellCheck="false"
+              />
+            </div>
+            <div className="panel-footer-action">
+                <button 
+                  className="btn-dark" 
+                  onClick={handleSend}
+                  disabled={!isConnected}
+                >
+                  Start Cutting
+                </button>
             </div>
           </div>
-          <div className="editor-container">
-            <textarea
-              className="code-editor"
-              value={gcode}
-              onChange={(e) => setGcode(e.target.value)}
-              spellCheck="false"
-            />
+
+          {/* Console Panel */}
+          <div className="panel console-panel">
+             <div className="panel-header dark-header">
+                <h2>Terminal</h2>
+             </div>
+             <div className="console-body">
+                {logs.map((log, i) => (
+                    <div key={i} className={`log-entry log-${log.type}`}>
+                        <span className="log-time">[{log.time}]</span> {log.message}
+                    </div>
+                ))}
+                <div ref={consoleEndRef} />
+             </div>
+             <div className="console-input-wrapper">
+                <span className="prompt">&gt;</span>
+                <input 
+                  type="text" 
+                  className="console-input"
+                  value={commandInput} 
+                  onChange={(e) => setCommandInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleManualCommand()}
+                  placeholder="Enter G-Code command..."
+                />
+             </div>
+             <div className="panel-footer-action dark-footer">
+                <button className="btn-light" onClick={handleManualCommand}>Run</button>
+             </div>
           </div>
-          
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            style={{ display: "none" }}
-            accept=".gcode,.gc,.nc"
-          />
-          <input
-            type="file"
-            ref={svgFileInputRef}
-            onChange={handleSvgFileChange}
-            style={{ display: "none" }}
-            accept=".svg"
-          />
         </div>
 
-        <div className="panel preview-panel">
-           <div className="panel-header">
-            <h2>Visualizer</h2>
-           </div>
-           <div className="canvas-container" style={{ display: 'block', overflowY: 'auto', padding: '20px' }}>
-              {gcode.trim().length === 0 && !svgContent && (
-                  <div className="canvas-instruction">
-                      Load a file to preview
-                  </div>
-              )}
-              
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', width: '100%' }}>
-                <div className="gcode-preview-wrapper" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                   <GCodePreview gcode={gcode} />
-                </div>
-
-                {svgContent && (
-                  <div className="svg-preview-container" style={{ width: '100%', maxWidth: '600px' }}>
-                     <h3 style={{ fontSize: '1rem', color: 'var(--text-secondary)', marginBottom: '10px' }}>Original SVG</h3>
-                     <div 
-                        className="svg-wrapper"
-                        style={{ 
-                          border: '1px solid var(--border-color)', 
-                          padding: '10px', 
-                          background: '#fff',
-                          borderRadius: 'var(--radius-sm)',
-                          display: 'flex',
-                          justifyContent: 'center',
-                          alignItems: 'center'
-                        }}
-                        dangerouslySetInnerHTML={{ __html: svgContent }}
-                     />
-                  </div>
-                )}
+        <div className="right-column">
+           {/* Preview Panel */}
+           <div className="panel preview-panel">
+              <div className="panel-header tabs-header">
+                 <button 
+                    className={`tab-btn ${activeTab === 'gcode' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('gcode')}
+                 >
+                    G-Code Preview
+                 </button>
+                 <button 
+                    className={`tab-btn ${activeTab === 'svg' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('svg')}
+                    disabled={!svgContent}
+                    title={!svgContent ? "No SVG loaded" : ""}
+                 >
+                    SVG Preview
+                 </button>
+              </div>
+              <div className="preview-content">
+                 {activeTab === 'gcode' && (
+                    <div className="gcode-preview-wrapper">
+                       <GCodePreview gcode={gcode} />
+                    </div>
+                 )}
+                 {activeTab === 'svg' && svgContent && (
+                    <div className="svg-preview-wrapper">
+                       <div dangerouslySetInnerHTML={{ __html: svgContent }} />
+                    </div>
+                 )}
+                 {activeTab === 'svg' && !svgContent && (
+                     <div className="empty-state">No SVG loaded</div>
+                 )}
               </div>
            </div>
         </div>
       </main>
 
-      <footer className="app-footer">
-        <button 
-          className="btn-primary btn-large" 
-          onClick={handleSend} 
-          disabled={!isConnected}
-        >
-          🚀 START CUTTING
-        </button>
-      </footer>
+      {/* Hidden File Inputs */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        style={{ display: "none" }}
+        accept=".gcode,.gc,.nc"
+      />
+      <input
+        type="file"
+        ref={svgFileInputRef}
+        onChange={handleSvgFileChange}
+        style={{ display: "none" }}
+        accept=".svg"
+      />
     </div>
   );
 }
