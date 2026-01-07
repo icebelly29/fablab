@@ -53,7 +53,7 @@ function App() {
     const wsUrl = isLocal ? "ws://localhost:8080" : `ws://${hostname}:81`;
     
     addLog(`Attempting connection to: ${wsUrl}`, 'info');
-
+////////////////////////////////////////////////////////////////////////////////////////////////////
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
@@ -201,7 +201,7 @@ function App() {
   const triggerSvgFileInput = () => {
     svgFileInputRef.current.click();
   };
-
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Status Pill Helpers
   const getStatusText = () => {
       if (isConnecting) return "Connecting...";
