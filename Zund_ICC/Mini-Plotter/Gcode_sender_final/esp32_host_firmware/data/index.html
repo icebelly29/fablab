@@ -22,7 +22,10 @@
 <main>
     <!-- Left: Console -->
     <section class="console-panel">
-        <div class="panel-header">G-Code Command</div>
+        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>G-Code Command</span>
+            <button id="btnClear" class="btn btn-action" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Clear</button>
+        </div>
         <div class="console-output" id="consoleOutput">
             <div class="console-line log-info">System initialized...</div>
             <div class="console-line log-info">Ready to connect.</div>

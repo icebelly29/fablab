@@ -1,6 +1,22 @@
 import SvgConverter from './SvgConverter.js';
 
+/**
+ * @file script.js
+ * @description Frontend logic for the Mini-Plotter G-code Sender.
+ * Handles WebSocket communication, file parsing (SVG/GCode), G-code visualization,
+ * and UI interactions.
+ */
+
 // --- UI State ---
+/**
+ * @typedef {Object} AppState
+ * @property {boolean} connected - WebSocket connection status.
+ * @property {WebSocket|null} socket - The WebSocket instance.
+ * @property {string[]} gcodeQueue - Array of G-code commands waiting to be sent.
+ * @property {boolean} isSending - Whether a job is currently in progress.
+ * @property {string} gcode - The current loaded G-code string.
+ * @property {string} svgContent - The raw SVG content (if applicable).
+ */
 const state = {
     connected: false,
     socket: null,
@@ -21,6 +37,12 @@ const btnStart = document.getElementById('btnStart');
 const dropZone = document.getElementById('dropZone');
 
 // --- Console Logic ---
+/**
+ * @function log
+ * @description Appends a message to the on-screen console log.
+ * @param {string} msg - The message text.
+ * @param {string} [type='info'] - The log type ('info', 'success', 'error', 'tx').
+ */
 function log(msg, type = 'info') {
     const line = document.createElement('div');
     line.className = `console-line log-${type}`;
@@ -30,12 +52,18 @@ function log(msg, type = 'info') {
 }
 
 // --- WebSocket Logic ---
+/**
+ * @function connect
+ * @description Initiates a WebSocket connection to the ESP32 host.
+ * Automatically determines the URL based on the current hostname.
+ */
 function connect() {
     if (state.connected) return;
 
     log('Connecting to Machine...', 'info');
     
     const hostname = window.location.hostname;
+    // Fallback for local development testing
     const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
     const wsUrl = isLocal ? "ws://localhost:8080" : `ws://${hostname}:81`;
 
@@ -76,6 +104,11 @@ function connect() {
     }
 }
 
+/**
+ * @function updateStatus
+ * @description Updates the UI connection badge.
+ * @param {boolean} isConnected - True if connected, false otherwise.
+ */
 function updateStatus(isConnected) {
     if (isConnected) {
         statusText.textContent = "Connected";
@@ -92,13 +125,20 @@ function updateStatus(isConnected) {
     }
 }
 
+/**
+ * @function handleServerMessage
+ * @description Processes incoming JSON messages from the ESP32.
+ * @param {Object} msg - The parsed JSON message object.
+ */
 function handleServerMessage(msg) {
     switch (msg.type) {
         case 'ack':
+            // 'ack' means the machine is ready for the next command
             if (state.isSending) sendNextLine();
             break;
         case 'serial':
             log(`ESP32: ${msg.data}`, 'info');
+            // Some firmwares send 'READY' string instead of explicit ACKs
             if (state.isSending && msg.data.toUpperCase().includes('READY')) {
                 sendNextLine();
             }
@@ -116,6 +156,12 @@ function handleServerMessage(msg) {
     }
 }
 
+/**
+ * @function sendCommand
+ * @description Sends a raw G-code string to the machine via WebSocket.
+ * @param {string} cmd - The G-code command (e.g., "G1 X10 Y10").
+ * @param {boolean} [isManual=false] - True if triggered by manual input (logs to UI).
+ */
 function sendCommand(cmd, isManual = false) {
     if (!state.connected || !state.socket) {
         log('Error: Not connected', 'error');
@@ -129,6 +175,10 @@ function sendCommand(cmd, isManual = false) {
 }
 
 // --- Sending Queue (Start/Stop) ---
+/**
+ * @function startJob
+ * @description Initiates the streaming of the current G-code in the editor.
+ */
 function startJob() {
     const code = editor.value;
     if (!code) {
@@ -150,6 +200,10 @@ function startJob() {
     sendNextLine();
 }
 
+/**
+ * @function stopJob
+ * @description Aborts the current job and clears the queue.
+ */
 function stopJob() {
     state.isSending = false;
     state.gcodeQueue = []; // Clear queue
@@ -160,6 +214,11 @@ function stopJob() {
     btnStart.classList.add('btn-start');
 }
 
+/**
+ * @function sendNextLine
+ * @description Pops the next command from the queue and sends it.
+ * Called automatically when an 'ack' is received.
+ */
 function sendNextLine() {
     if (!state.isSending) return;
 
@@ -172,6 +231,10 @@ function sendNextLine() {
     }
 }
 
+/**
+ * @function finishJob
+ * @description cleans up state after the last command is sent.
+ */
 function finishJob() {
     state.isSending = false;
     log('Job Complete.', 'success');
@@ -194,9 +257,22 @@ btnStart.addEventListener('click', () => {
 function handleManualSend() {
     const cmd = cmdInput.value.trim();
     if (!cmd) return;
+
+    if (cmd.toLowerCase() === 'clear' || cmd.toLowerCase() === '/clear') {
+        consoleOutput.innerHTML = '';
+        log('Console cleared.', 'info');
+        cmdInput.value = '';
+        return;
+    }
+
     sendCommand(cmd, true);
     cmdInput.value = '';
 }
+
+document.getElementById('btnClear').addEventListener('click', () => {
+    consoleOutput.innerHTML = '';
+    log('Console cleared.', 'info');
+});
 
 document.getElementById('btnRun').addEventListener('click', handleManualSend);
 cmdInput.addEventListener('keypress', (e) => {
@@ -238,6 +314,11 @@ window.switchTab = function(tabName) {
 }
 
 // --- G-Code Renderer ---
+/**
+ * @function renderGCode
+ * @description Parses G-code and draws a preview on the HTML5 Canvas.
+ * @param {string} gcode - The G-code string to visualize.
+ */
 function renderGCode(gcode) {
     const canvas = document.getElementById('gcodeCanvas');
     const container = document.getElementById('canvasContainer');
@@ -342,6 +423,12 @@ window.addEventListener('resize', () => {
 });
 
 // --- File Handling & Drag/Drop ---
+/**
+ * @function handleFile
+ * @description Process an uploaded file (SVG or GCode).
+ * Automatically detects file type, parses/converts SVG, and loads it into the editor.
+ * @param {File} file - The file object from Input or Drag/Drop.
+ */
 async function handleFile(file) {
     if (!file) return;
     log(`Loading ${file.name}...`, 'info');
@@ -377,7 +464,7 @@ async function handleFile(file) {
                 const vbAttr = svg.getAttribute('viewBox');
 
                 if (vbAttr) {
-                    viewbox = vbAttr.split(/[\s,]+/).map(parseFloat);
+                    viewbox = vbAttr.split(/[ ,]+/).map(parseFloat);
                 }
                 
                 const parseToMM = (str) => {
@@ -433,7 +520,7 @@ async function handleFile(file) {
             const finalOffsetY = offsetY - (vbMinY * scale);
 
             try {
-                const converter = new SvgConverter({ 
+                const converter = new SvgConverter({
                     feedRate: 1000, 
                     scale: scale,
                     offsetX: finalOffsetX,

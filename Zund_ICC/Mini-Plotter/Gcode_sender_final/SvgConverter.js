@@ -1,4 +1,19 @@
+/**
+ * @file SvgConverter.js
+ * @description A utility class to convert SVG path data into G-code commands for a CNC plotter.
+ * Handles vector mathematics, curve flattening (Beziers), and coordinate transformations.
+ */
+
+/**
+ * @class Vector2
+ * @description Represents a 2D vector with basic arithmetic operations.
+ */
 class Vector2 {
+  /**
+   * @constructor
+   * @param {number} x - The X coordinate.
+   * @param {number} y - The Y coordinate.
+   */
   constructor(x, y) {
     this.x = x;
     this.y = y;
@@ -17,7 +32,18 @@ class Vector2 {
   dist(v) { return this.sub(v).length(); }
 }
 
+/**
+ * @class CubicBezier
+ * @description Represents a Cubic Bezier curve defined by 4 control points.
+ */
 class CubicBezier {
+  /**
+   * @constructor
+   * @param {Vector2} p0 - Start point.
+   * @param {Vector2} p1 - First control point.
+   * @param {Vector2} p2 - Second control point.
+   * @param {Vector2} p3 - End point.
+   */
   constructor(p0, p1, p2, p3) {
     this.p0 = p0;
     this.p1 = p1;
@@ -25,6 +51,12 @@ class CubicBezier {
     this.p3 = p3;
   }
 
+  /**
+   * @method sample
+   * @description Calculates a point on the curve at parameter t.
+   * @param {number} t - Interpolation factor (0.0 to 1.0).
+   * @returns {Vector2} The point on the curve.
+   */
   sample(t) {
     const t1 = 1 - t;
     const a = t1 * t1 * t1;
@@ -38,18 +70,35 @@ class CubicBezier {
   }
 }
 
+/**
+ * @class SvgConverter
+ * @description Main class for parsing SVG strings and generating G-code.
+ */
 class SvgConverter {
+  /**
+   * @constructor
+   * @param {Object} options - Configuration options.
+   * @param {number} [options.feedRate=300] - Movement speed for cutting (G1).
+   * @param {number} [options.scale=1.0] - Global scaling factor.
+   * @param {number} [options.offsetX=0] - X offset for centering/positioning.
+   * @param {number} [options.offsetY=0] - Y offset for centering/positioning.
+   * @param {number} [options.tolerance=0.05] - Tolerance for curve flattening (smaller = smoother but more lines).
+   */
   constructor(options = {}) {
-    this.feedRate = options.feedRate || 300; // Default to 300 matching examples
+    this.feedRate = options.feedRate || 300; 
     this.scale = options.scale || 1.0;
     this.offsetX = options.offsetX || 0;
     this.offsetY = options.offsetY || 0;
-    // Tolerance for flattening curves. Lower = more segments = smoother but larger file.
-    // Example files are very dense, implying low tolerance (high precision).
     this.tolerance = options.tolerance || 0.05; 
-    this.decimals = 6; // High precision matching examples
+    this.decimals = 6; 
   }
 
+  /**
+   * @method convert
+   * @description Converts an SVG string into a G-code string.
+   * @param {string} svgContent - The raw XML string of the SVG file.
+   * @returns {string} The generated G-code.
+   */
   convert(svgContent) {
     const gcode = [];
     gcode.push('G21'); // Metric
@@ -70,7 +119,7 @@ class SvgConverter {
             const h = svgRoot.getAttribute('height');
             
             if (vb) {
-                const parts = vb.split(/[\s,]+/).map(parseFloat);
+                const parts = vb.split(/[\S,]+/).map(parseFloat);
                 if (parts.length === 4) {
                     pageW = parts[2];
                     pageH = parts[3];
@@ -133,7 +182,7 @@ class SvgConverter {
             while(parent && parent.tagName !== 'svg') {
                 const transform = parent.getAttribute('transform');
                 if (transform) {
-                    const translateMatch = transform.match(/translate\(\s*([-+]?[\d.]+)\s*[,\s]\s*([-+]?[\d.]+)\s*\)/);
+                    const translateMatch = transform.match(/translate\(\s*([-+]?[\d.]+)\s*[\s, ]\s*([-+]?[\d.]+)\s*\)/);
                     if (translateMatch) {
                         offsetX += parseFloat(translateMatch[1]);
                         offsetY += parseFloat(translateMatch[2]);
@@ -164,7 +213,7 @@ class SvgConverter {
         
     } else {
        // Node.js fallback (simplified regex for path only)
-        const pathRegex = /<path[^>]*\bd=["']([^"']+)["']/gi;
+        const pathRegex = /<path[^>]*\bd=[\"']([^\"']+)["']/gi;
         let match;
         while ((match = pathRegex.exec(svgContent)) !== null) {
           const d = match[1];
@@ -180,6 +229,12 @@ class SvgConverter {
     return gcode.join('\n');
   }
 
+  /**
+   * @method parseElement
+   * @description Parses a DOM element (path, rect, circle) into a standardized list of path commands.
+   * @param {Element} el - The DOM element.
+   * @returns {Array} List of path commands.
+   */
   parseElement(el) {
       const tagName = el.tagName.toLowerCase();
       // Normalized to Path commands
@@ -216,12 +271,24 @@ class SvgConverter {
       return [];
   }
 
+  /**
+   * @method parsePathData
+   * @description Parses SVG 'd' attribute string into command objects.
+   * @param {string} d - The path data string.
+   * @returns {Array} Array of command objects {type: 'M', args: [...]}.
+   */
   parsePathData(d) {
      const tokens = d.match(/([a-zA-Z])|([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)/g);
     if (!tokens) return [];
     return this.parseTokens(tokens);
   }
 
+  /**
+   * @method parseTokens
+   * @description Internal helper to consume tokens and build command list.
+   * @param {Array} tokens - List of string tokens.
+   * @returns {Array} Commands.
+   */
   parseTokens(tokens) {
       const commands = [];
       let i = 0;
@@ -275,6 +342,12 @@ class SvgConverter {
       return commands;
   }
 
+  /**
+   * @method generateGcode
+   * @description Converts parsed SVG commands into G-code strings.
+   * @param {Array} commands - List of parsed commands.
+   * @returns {Array} Array of G-code lines.
+   */
   generateGcode(commands) {
     const gcode = [];
     let cur = new Vector2(0, 0);
@@ -387,7 +460,7 @@ class SvgConverter {
             }
              case 'A': {
                  // Fallback: approximate arc as linear segment to end point
-                 // Proper arc flattening is complex without `lyon`. 
+                 // Proper arc flattening is complex without `lyon`.
                  // Given the examples use pure G1s, flattening is desired anyway.
                  // TODO: Implement actual arc subdivision for A command.
                  const p = getPt(5);
@@ -403,6 +476,10 @@ class SvgConverter {
     return gcode;
   }
 
+  /**
+   * @method emitLinear
+   * @description Helper to generate a G1 linear cut command.
+   */
   emitLinear(gcode, p) {
       // G1 = Cut (Pen Down)
       const x = (p.x * this.scale) + this.offsetX;
@@ -410,6 +487,10 @@ class SvgConverter {
       gcode.push(`G1 X${x.toFixed(this.decimals)} Y${y.toFixed(this.decimals)} F${this.feedRate}`);
   }
 
+  /**
+   * @method flattenBezier
+   * @description Recursively subdivides a bezier curve into linear segments.
+   */
   flattenBezier(gcode, bezier) {
       // Recursive subdivision or sampling
       // Examples show high density segments.
@@ -419,6 +500,10 @@ class SvgConverter {
       this.subdivideBezier(gcode, bezier, 0, 1);
   }
 
+  /**
+   * @method subdivideBezier
+   * @description Recursive logic for bezier flattening.
+   */
   subdivideBezier(gcode, bezier, t0, t1) {
       const p0 = bezier.sample(t0);
       const p1 = bezier.sample(t1);
