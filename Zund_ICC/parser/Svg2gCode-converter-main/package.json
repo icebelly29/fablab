@@ -1,0 +1,37 @@
+{
+  "name": "svg-to-gcode",
+  "version": "1.4.4",
+  "type": "module",
+  "main": "converter.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.8"
+  },
+  "dependencies": {
+    "svgo": "^3.2.0"
+  },
+  "description": "Convert SVG files to G-code for plotter",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MidlajN/Svg2gCode-converter.git"
+  },
+  "keywords": [
+    "Svg",
+    "svg2gcode",
+    "gcode",
+    "plotter",
+    "cnc",
+    "parser",
+    "svg to gcode",
+    "svg converter"
+  ],
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/MidlajN/Svg2gCode-converter/issues"
+  },
+  "homepage": "https://github.com/MidlajN/Svg2gCode-converter#readme"
+}
