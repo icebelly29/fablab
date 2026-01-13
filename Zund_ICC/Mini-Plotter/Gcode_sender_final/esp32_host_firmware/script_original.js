@@ -1,4 +1,4 @@
-import SvgConverter from './SvgConverter.js';
+import SvgConverter from './data/SvgConverter.js';
 
 /**
  * @file script.js

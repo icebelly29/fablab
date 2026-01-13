@@ -23,7 +23,7 @@ import { handleFile } from './FileHandler.js';
 // We keep all important variables in one place so it's easy to track what's happening.
 const state = {
     gcodeQueue: [],      // Array holding the lines of G-code waiting to be sent
-    isSending: false,    // Flag: Are we currently running a job?
+    isSending: false,    // Flag: to check, Are we currently running a job?
     gcode: ''            // The full text of the loaded G-code file
 };
 
