@@ -76,6 +76,11 @@ The converter behavior can be tuned using the following parameters:
     *   Use `1.0` for 1:1 scale (mm to mm).
     *   Use `25.4` to convert inches to millimeters.
 
+*   **`flipY` (Default: false)**:
+    Controls vertical orientation.
+    *   *true* = Flips the Y-axis (useful for correcting SVG coordinates where Y+ is down vs. CNC where Y+ is up).
+    *   *false* = Standard SVG orientation.
+
 ---
 
 ## 5. Developer Guide (Code Structure)
@@ -90,6 +95,7 @@ For developers maintaining `SvgConverter.js`, the class structure is organized a
 
 *   **`SvgConverter` Class**:
     *   **`convert(svgString)`**: The entry point. Manages the DOM parsing and overall flow.
+    *   **`transform(vector)`**: Helper method that applies scaling, Y-axis flipping (if enabled), and offsets to every coordinate point before G-code generation.
     *   **`parsePathData(d)`**: Implements the state machine that reads SVG path strings.
     *   **`flattenBezier(bezier)`**: The recursive function that implements the Adaptive Subdivision logic described in Stage 3.
     *   **`generateGcode(commands)`**: Formats the final numerical data into standard G-code syntax.

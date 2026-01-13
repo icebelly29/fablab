@@ -90,7 +90,24 @@ class SvgConverter {
     this.offsetX = options.offsetX || 0;
     this.offsetY = options.offsetY || 0;
     this.tolerance = options.tolerance || 0.05; 
+    this.flipY = options.flipY || false;
     this.decimals = 6; 
+  }
+
+  /**
+   * @method transform
+   * @description Applies scaling, flipping, and offsets to a point.
+   * @param {Vector2} p - The point to transform.
+   * @returns {Object} The transformed coordinates {x, y}.
+   */
+  transform(p) {
+      const x = (p.x * this.scale) + this.offsetX;
+      let y = (p.y * this.scale);
+      if (this.flipY) {
+          y = -y;
+      }
+      y += this.offsetY;
+      return { x, y };
   }
 
   /**
@@ -372,8 +389,7 @@ class SvgConverter {
                 const p = getPt(0);
                 // M = Move (Pen Up)
                 // G0 X Y
-                const x = (p.x * this.scale) + this.offsetX;
-                const y = (p.y * this.scale) + this.offsetY;
+                const { x, y } = this.transform(p);
                 gcode.push(`G0 X${x.toFixed(this.decimals)} Y${y.toFixed(this.decimals)}`);
                 cur = p;
                 start = p;
@@ -482,8 +498,7 @@ class SvgConverter {
    */
   emitLinear(gcode, p) {
       // G1 = Cut (Pen Down)
-      const x = (p.x * this.scale) + this.offsetX;
-      const y = (p.y * this.scale) + this.offsetY;
+      const { x, y } = this.transform(p);
       gcode.push(`G1 X${x.toFixed(this.decimals)} Y${y.toFixed(this.decimals)} F${this.feedRate}`);
   }
 

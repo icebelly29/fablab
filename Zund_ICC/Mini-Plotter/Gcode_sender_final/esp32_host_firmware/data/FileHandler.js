@@ -122,7 +122,13 @@ export async function handleFile(file, onGCodeReady, onSwitchTab) {
 
             // Calculate final offset to shift the origin
             const finalOffsetX = offsetX - (vbMinX * scale);
-            const finalOffsetY = offsetY - (vbMinY * scale);
+            // Flip Y correction: We are flipping Y, so we need to shift the "bottom" (max Y in SVG) to the "bottom" offset.
+            // Original: offsetY - (vbMinY * scale) (for non-flipped)
+            // Flipped: offsetY + (vbMinY + vbH) * scale
+            // Wait, (vbMinY + vbH) is the max Y coordinate in SVG space.
+            // When flipped, it becomes negative.
+            // So we add it back? Let's stick to the requested formula: offsetY + (vbMinY + vbH) * scale
+            const finalOffsetY = offsetY + (vbMinY + vbH) * scale;
 
             try {
                 // Run the conversion!
@@ -130,7 +136,8 @@ export async function handleFile(file, onGCodeReady, onSwitchTab) {
                     feedRate: 1000, 
                     scale: scale,
                     offsetX: finalOffsetX,
-                    offsetY: finalOffsetY
+                    offsetY: finalOffsetY,
+                    flipY: true
                 });
                 const gcode = converter.convert(text);
                 
