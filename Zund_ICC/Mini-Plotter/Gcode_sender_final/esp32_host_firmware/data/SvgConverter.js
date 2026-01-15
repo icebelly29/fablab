@@ -119,6 +119,7 @@ class SvgConverter {
   convert(svgContent) {
     const gcode = [];
     gcode.push('G21'); // Metric
+    gcode.push('G28'); // Home
     gcode.push('G90'); // Absolute
 
     if (typeof DOMParser !== 'undefined') {
