@@ -1,4 +1,33 @@
 /**
+ * ============================================================================
+ *                       VIEW NAVIGATION (TABS)
+ * ============================================================================
+ * 
+ * This module controls the switching between different "Screens" or "Views"
+ * within the single-page application.
+ * 
+ * MECHANISM:
+ * We don't actually load new HTML pages. Instead, we have all 3 panels loaded
+ * simultaneously in the background. We simply toggle a CSS class ".hidden"
+ * to show or hide them.
+ * 
+ * THE VIEWS:
+ * 1. G-Code Preview:
+ *    - The default view.
+ *    - Shows the HTML5 Canvas where the G-code path is drawn visually.
+ *    - Handles the "Empty State" (Drag & Drop Prompt) vs the "Viewer" (Canvas).
+ * 
+ * 2. SVG Preview:
+ *    - Shows the raw SVG file exactly as the browser renders it.
+ *    - Useful for debugging "Why does my SVG look weird?".
+ * 
+ * 3. Editor:
+ *    - A simple text area showing the raw G-code text.
+ *    - Allows the user to manually edit code before sending.
+ * ============================================================================
+ */
+
+/**
  * @file Tabs.js
  * @description TAB NAVIGATION
  * 

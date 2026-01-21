@@ -1,4 +1,30 @@
 /**
+ * ============================================================================
+ *                       UI LOGGING SYSTEM (CONSOLE)
+ * ============================================================================
+ * 
+ * This module provides a centralized way to display messages to the user within
+ * the application's interface (the black scrolling box), similar to a terminal.
+ * 
+ * FEATURES:
+ * 1. Visual Feedback: It's the primary way the user knows what's happening.
+ *    - "Connecting..."
+ *    - "Job Finished"
+ *    - "Error: File too large"
+ * 2. Color Coding: Messages are styled based on their importance:
+ *    - White: General Info
+ *    - Green: Success / Connection established
+ *    - Red: Errors / Disconnections
+ *    - Dim Grey: Technical data (outgoing commands)
+ * 3. Auto-Scroll: Automatically jumps to the bottom so the latest message is
+ *    always visible.
+ * 
+ * USAGE:
+ * Import 'log' and call it anywhere: log("Hello World", "success");
+ * ============================================================================
+ */
+
+/**
  * @file Console.js
  * @description ON-SCREEN LOGGER
  * 

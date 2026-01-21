@@ -1,4 +1,63 @@
 /**
+ * ============================================================================
+ *                SVG TO G-CODE CONVERTER: THE DEEP DIVE
+ * ============================================================================
+ * 
+ * This module is a custom-built geometry engine designed to translate complex
+ * vector mathematics into simple linear machine movements.
+ * 
+ * 1. THE GEOMETRY ENGINE (Vector2 & CubicBezier)
+ *    SVG drawings aren't just lists of points; they are mathematical formulas.
+ *    - Vector2: Handles the heavy lifting of 2D math (addition, subtraction, 
+ *      normalization, and distance checking).
+ *    - CubicBezier: Implements the Bernstein Polynomial formula. It allows us 
+ *      to calculate any exact point (x,y) along a curve at time 't' (0 to 1).
+ * 
+ * 2. SHAPE NORMALIZATION (The "Standardizer")
+ *    SVG is messy—it has circles, rects, and paths. We convert EVERYTHING into
+ *    a "Unified Path" format.
+ *    - Circles are converted into 4 Cubic Bezier curves using a magic constant
+ *      (0.552284), which approximates a circular arc with 99.9% accuracy.
+ *    - Rectangles are converted into a sequence of 4 Linear commands.
+ * 
+ * 3. THE PATH TOKENIZER (Parsing)
+ *    SVG path strings (the 'd' attribute) look like "M10,20 L30,40". 
+ *    Our parser:
+ *    - Tokenizes: Splits numbers from letters.
+ *    - State Tracking: Remembers the "Last Command" to support SVG's shorthand
+ *      (where you can omit letters if the command type stays the same).
+ *    - Relative vs Absolute: Converts lower-case commands (relative) into 
+ *      global coordinates by adding them to the current pen position.
+ * 
+ * 4. CURVE FLATTENING (Recursive Subdivision)
+ *    CNC machines (GRBL/Marlin) only understand straight lines (G1). To draw
+ *    a curve, we use a "Divide and Conquer" strategy:
+ *    
+ *    A. Look at a curve segment from Point A to Point B.
+ *    B. Calculate the actual midpoint of the curve (the mathematical "truth").
+ *    C. Calculate where the midpoint WOULD be if the line were perfectly straight.
+ *    D. If the distance (error) between the two is greater than 'tolerance' 
+ *       (e.g., 0.05mm), the segment is "too curvy".
+ *    E. Split the curve into two halves and repeat the process (Recursion).
+ *    F. If the error is tiny, we emit a single straight G1 line.
+ *    
+ *    This ensures high detail on sharp turns and fewer lines on flat sections.
+ * 
+ * 5. COORDINATE TRANSFORMATION PIPELINE
+ *    Before a number becomes G-code, it goes through a 4-stage filter:
+ *    1. Scale: Convert SVG units to real-world millimeters.
+ *    2. Flip Y: Vertical inversion (Screen Y-down vs Machine Y-up).
+ *    3. Offset: Shifting the drawing to the center of the physical bed.
+ *    4. Rounding: Truncating to 6 decimal places for machine compatibility.
+ * 
+ * 6. SMART FILTERING
+ *    The converter automatically detects and deletes "Page Borders" (rectangles
+ *    that perfectly match the document size) so your plotter doesn't try to
+ *    cut the edge of the paper.
+ * ============================================================================
+ */
+
+/**
  * @file SvgConverter.js
  * @description A utility class to convert SVG path data into G-code commands for a CNC plotter.
  * Handles vector mathematics, curve flattening (Beziers), and coordinate transformations.

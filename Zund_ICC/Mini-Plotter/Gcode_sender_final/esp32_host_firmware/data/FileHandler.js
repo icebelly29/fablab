@@ -1,4 +1,44 @@
 /**
+ * ============================================================================
+ *                       FILE IMPORT & PROCESSING
+ * ============================================================================
+ * 
+ * This module acts as the "Receptionist" for files. It decides what to do with
+ * files dropped onto the page or selected by the user.
+ * 
+ * PIPELINE:
+ * 1. Detection: Is it a .gcode file or an .svg file?
+ * 
+ * 2. G-CODE Path (Simple):
+ *    - Just reads the text content.
+ *    - Sends it directly to the machine.
+ * 
+ * 3. SVG Path (Complex):
+ *    We must prepare the vector graphic for the physical constraints of the plotter.
+ *    
+ *    A. Unit Normalization:
+ *       SVGs can be in pixels, inches, cm, mm, etc. We try to convert everything
+ *       to millimeters (mm) to match the machine.
+ *       
+ *    B. Scaling (Auto-Fit):
+ *       If the drawing is 500mm wide but the bed is only 230mm, we automatically
+ *       shrink the drawing to fit safely within the margins.
+ *       
+ *    C. Centering:
+ *       We calculate the offsets needed to place the drawing exactly in the
+ *       middle of the bed.
+ *       
+ *    D. Coordinate Flip:
+ *       Computer screens have (0,0) at the Top-Left.
+ *       CNC machines usually have (0,0) at the Bottom-Left.
+ *       We have to mathematically flip the Y-axis so the drawing isn't upside down.
+ * 
+ *    E. Conversion:
+ *       Finally, we pass all these parameters to 'SvgConverter.js' to get the G-code.
+ * ============================================================================
+ */
+
+/**
  * @file FileHandler.js
  * @description FILE IMPORT LOGIC
  * 

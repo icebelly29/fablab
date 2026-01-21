@@ -1,4 +1,28 @@
 /**
+ * ============================================================================
+ *                       USER INTERFACE (VISUAL FEEDBACK)
+ * ============================================================================
+ * 
+ * This module is responsible for changing the "Look and Feel" of the page
+ * based on what the software is doing.
+ * 
+ * RESPONSIBILITIES:
+ * 1. Status Badge (Top Right):
+ *    - Green: Connected to Machine.
+ *    - Red: Disconnected (Internet lost or ESP32 off).
+ * 
+ * 2. User Count:
+ *    - Shows how many people are currently controlling the machine.
+ *    - Helps avoid conflicts in a classroom setting.
+ * 
+ * 3. Start/Stop Button:
+ *    - "Start Cutting" (Green) -> When idle.
+ *    - "Stop Cutting" (Red)    -> When running a job.
+ *    - Disabled (Grey)         -> When disconnected.
+ * ============================================================================
+ */
+
+/**
  * @file UI.js
  * @description UI UPDATES
  * 

@@ -1,4 +1,34 @@
 /**
+ * ============================================================================
+ *                       G-CODE VISUALIZER (CANVAS)
+ * ============================================================================
+ * 
+ * This module draws the "Map" of what the machine is going to do. It takes text
+ * (G-code) and turns it into a picture on the screen.
+ * 
+ * THE BIG MATH PROBLEM (Coordinate Mapping):
+ * 1. Machine World:
+ *    - Origin (0,0) is at the BOTTOM-Left.
+ *    - +Y goes UP.
+ *    - Units are in Millimeters (mm).
+ * 
+ * 2. Computer Screen World (HTML Canvas):
+ *    - Origin (0,0) is at the TOP-Left.
+ *    - +Y goes DOWN.
+ *    - Units are in Pixels (px).
+ * 
+ * HOW WE SOLVE IT:
+ * We create two mapping functions 'mapX' and 'mapY' that act as translators.
+ * [Machine X,Y] ---> [Scale] ---> [Flip Y] ---> [Offset] ---> [Screen Pixels]
+ * 
+ * VISUAL CUES:
+ * - Solid Blue Lines: G1 (Cutting/Pen Down) - The machine is working.
+ * - Dashed Grey Lines: G0 (Travel/Pen Up) - The machine is moving to a new spot.
+ * - Dashed Box: Represents the physical size of the machine bed (230x310mm).
+ * ============================================================================
+ */
+
+/**
  * @file Viewer.js
  * @description VISUALIZER
  * 

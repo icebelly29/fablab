@@ -1,4 +1,32 @@
 /**
+ * ============================================================================
+ *                       NETWORK COMMUNICATIONS (WEBSOCKETS)
+ * ============================================================================
+ * 
+ * This module manages the real-time link between the browser (User Interface)
+ * and the ESP32 microcontroller (The Machine).
+ * 
+ * WHY WEBSOCKETS?
+ * Unlike standard HTTP requests (like loading a webpage), WebSockets keep a 
+ * "pipe" open constantly. This allows:
+ * 1. Instant commands: When you press "Jog Left", the machine moves immediately.
+ * 2. Real-time feedback: The machine can tell us "I'm done" or "Error" without
+ *    us asking for updates constantly.
+ * 
+ * HOW IT WORKS:
+ * 1. Connection: It attempts to connect to the ESP32's IP address on Port 81.
+ *    - If running locally (laptop), it looks for a test server at localhost:8080.
+ * 2. Protocol: We speak JSON (JavaScript Object Notation).
+ *    - Sending: { "type": "gcode", "data": "G0 X10" }
+ *    - Receiving: { "type": "ack", "data": "ok" } or { "type": "serial", ... }
+ * 3. Flow Control:
+ *    We wait for an "ack" (acknowledgment) from the machine before sending the 
+ *    next line of a large file. This prevents overflowing the machine's tiny brain.
+ * 
+ * ============================================================================
+ */
+
+/**
  * @file Connection.js
  * @description NETWORK COMMUNICATIONS
  * 

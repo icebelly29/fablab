@@ -1,3 +1,35 @@
+/**
+ * ============================================================================
+ *                       MAIN CONTROLLER (THE BRAIN)
+ * ============================================================================
+ * 
+ * This file is the central nervous system of the web application. It connects
+ * the muscles (Connection), the eyes (Viewer), and the skin (UI) together.
+ * 
+ * CORE RESPONSIBILITIES:
+ * 1. Application State:
+ *    Keeps track of "What is happening right now?"
+ *    - Is a job running?
+ *    - Is the machine connected?
+ *    - What code is loaded?
+ * 
+ * 2. The "Send-Wait-Send" Loop (Job Execution):
+ *    Streaming G-code to a microcontroller isn't like downloading a file. 
+ *    We can't send it all at once because the Arduino has very little memory.
+ *    
+ *    The Protocol:
+ *    [Browser] sends Line 1 ---> [ESP32]
+ *    [Browser] waits...
+ *    [ESP32] executes Line 1 ---> sends "Ack" (Okay, done)
+ *    [Browser] receives "Ack" ---> sends Line 2
+ * 
+ * 3. Event Wiring:
+ *    - Listens for button clicks (Start/Stop).
+ *    - Listens for drag-and-drop file uploads.
+ *    - Listens for manual command typing.
+ * ============================================================================
+ */
+
 import { log, clearConsole } from './Console.js';
 import { updateStatus, setStartButtonState } from './UI.js';
 import { MachineConnection } from './Connection.js';
