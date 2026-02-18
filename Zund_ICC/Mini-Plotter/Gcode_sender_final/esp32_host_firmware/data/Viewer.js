@@ -48,6 +48,7 @@
  * @param {string} containerId - HTML ID of the parent div (for sizing).
  */
 export function renderGCode(gcode, canvasId = 'gcodeCanvas', containerId = 'canvasContainer') {
+    console.log("Viewer: Rendering G-Code with Sampling Points (v2)"); // Debug log to confirm update
     const canvas = document.getElementById(canvasId);
     const container = document.getElementById(containerId);
     if (!canvas || !container) return;
@@ -143,20 +144,34 @@ export function renderGCode(gcode, canvasId = 'gcodeCanvas', containerId = 'canv
     ctx.lineCap = 'round';
 
     paths.forEach(p => {
+        const startX = mapX(p.from.x);
+        const startY = mapY(p.from.y);
+        const endX = mapX(p.to.x);
+        const endY = mapY(p.to.y);
+
         ctx.beginPath();
-        ctx.moveTo(mapX(p.from.x), mapY(p.from.y));
-        ctx.lineTo(mapX(p.to.x), mapY(p.to.y));
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
         
         if (p.type === 'move') {
             // G0: Rapid Move (Pen Up) -> Grey Dashed Line
             ctx.strokeStyle = '#d1d5db'; 
             ctx.setLineDash([5, 5]);
+            ctx.stroke();
         } else {
             // G1: Cut Move (Pen Down) -> Blue Solid Line
             ctx.strokeStyle = '#3b82f6'; 
             ctx.setLineDash([]);
+            ctx.stroke();
+
+            // VISUALIZE SAMPLING POINTS
+            // Draw a small dot at the end of every cut segment
+            // Color: Bright Orange, Opaque
+            ctx.fillStyle = '#ff6600'; 
+            ctx.beginPath();
+            ctx.arc(endX, endY, 3.0, 0, 2 * Math.PI); // Large 3px radius (6px wide)
+            ctx.fill();
         }
-        ctx.stroke();
     });
 
     // Empty State

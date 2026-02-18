@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bezier Kinematics - Cartesian System</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        #canvas-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #252526;
+            position: relative;
+        }
+        canvas {
+            background-color: #1e1e1e;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            border-radius: 4px;
+            cursor: crosshair;
+        }
+        #sidebar {
+            width: 350px;
+            padding: 20px;
+            background-color: #333333;
+            border-left: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+        h2 { margin-top: 0; color: #fff; font-size: 1.2rem; }
+        .control-group {
+            background: #252526;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #444;
+        }
+        .slider-container { margin-top: 10px; }
+        input[type=range] { width: 100%; cursor: pointer; }
+        
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            margin-top: 10px;
+        }
+        .data-item {
+            background: #1e1e1e;
+            padding: 5px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .data-label { color: #888; font-size: 0.7rem; display: block; }
+        .data-val { color: #4ec9b0; font-weight: bold; }
+        
+        .legend { font-size: 0.8rem; margin-top: 5px; }
+        .val-pos { color: #4ec9b0; }
+        .val-vel { color: #ce9178; }
+        .val-acc { color: #569cd6; }
+        
+        button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 2px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+        }
+        button:hover { background: #1177bb; }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="bezierCanvas" width="800" height="600"></canvas>
+    </div>
+
+    <div id="sidebar">
+        <h2>Bezier Kinematics</h2>
+        
+        <div class="control-group">
+            <label>Parameter <strong>t</strong>: <span id="t-display">0.50</span></label>
+            <div class="slider-container">
+                <input type="range" id="t-slider" min="0" max="1" step="0.005" value="0.5">
+            </div>
+            <button id="animate-btn">Animate Path</button>
+        </div>
+
+        <div class="control-group">
+            <label>Cartesian State (Y-Up)</label>
+            
+            <div style="margin-top:10px; border-bottom:1px solid #444; padding-bottom:5px; margin-bottom:5px; font-weight:bold;">X Axis</div>
+            <div class="data-grid">
+                <div class="data-item"><span class="data-label">Pos (x)</span><span class="data-val val-pos" id="val-x">0</span></div>
+                <div class="data-item"><span class="data-label">Vel (vx)</span><span class="data-val val-vel" id="val-vx">0</span></div>
+                <div class="data-item"><span class="data-label">Acc (ax)</span><span class="data-val val-acc" id="val-ax">0</span></div>
+            </div>
+
+            <div style="margin-top:10px; border-bottom:1px solid #444; padding-bottom:5px; margin-bottom:5px; font-weight:bold;">Y Axis</div>
+            <div class="data-grid">
+                <div class="data-item"><span class="data-label">Pos (y)</span><span class="data-val val-pos" id="val-y">0</span></div>
+                <div class="data-item"><span class="data-label">Vel (vy)</span><span class="data-val val-vel" id="val-vy">0</span></div>
+                <div class="data-item"><span class="data-label">Acc (ay)</span><span class="data-val val-acc" id="val-ay">0</span></div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Coordinate Info</label>
+            <ul style="padding-left: 20px; font-size: 0.9rem; color: #bbb; margin-top: 10px;">
+                <li><strong>Origin (0,0)</strong>: Bottom-Left.</li>
+                <li><strong>Y-Axis</strong>: Increases Upwards.</li>
+                <li><strong>Pink Dot</strong>: Instantaneous position.</li>
+                <li><strong>Vectors</strong>: Scaled for visibility on screen.</li>
+            </ul>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('bezierCanvas');
+    const ctx = canvas.getContext('2d');
+    const tSlider = document.getElementById('t-slider');
+    const tDisplay = document.getElementById('t-display');
+    
+    // Configuration
+    const padding = 60; // Space for axes and labels
+    const originX = padding;
+    const originY = canvas.height - padding;
+    const gridSpacing = 50;
+
+    // Control Points in CARTESIAN space (relative to origin)
+    let points = [
+        { x: 50,  y: 50,  label: 'P0' },
+        { x: 100, y: 400, label: 'P1' },
+        { x: 500, y: 450, label: 'P2' },
+        { x: 650, y: 100, label: 'P3' }
+    ];
+
+    let t = 0.5;
+    let isDragging = false;
+    let dragIndex = -1;
+
+    // --- Coordinate Mapping ---
+    
+    // Map Cartesian (x,y) to Canvas [x,y]
+    function toCanvas(cartX, cartY) {
+        return {
+            x: originX + cartX,
+            y: originY - cartY // Flip Y
+        };
+    }
+
+    // Map Canvas [x,y] to Cartesian (x,y)
+    function toCartesian(canvX, canvY) {
+        return {
+            x: canvX - originX,
+            y: originY - canvY // Flip Y
+        };
+    }
+
+    // --- Math Functions ---
+    
+    const getPos = (p0, p1, p2, p3, t) => {
+        const u = 1 - t;
+        return (u ** 3) * p0 + 3 * (u ** 2) * t * p1 + 3 * u * (t ** 2) * p2 + (t ** 3) * p3;
+    };
+
+    const getVel = (p0, p1, p2, p3, t) => {
+        const u = 1 - t;
+        return 3 * (u ** 2) * (p1 - p0) + 6 * u * t * (p2 - p1) + 3 * (t ** 2) * (p3 - p2);
+    };
+
+    const getAcc = (p0, p1, p2, p3, t) => {
+        const u = 1 - t;
+        return 6 * u * (p2 - 2 * p1 + p0) + 6 * t * (p3 - 2 * p2 + p1);
+    };
+
+    // --- Rendering ---
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        drawAxes();
+
+        // Bezier Curve
+        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        const start = toCanvas(points[0].x, points[0].y);
+        ctx.moveTo(start.x, start.y);
+        for (let i = 0; i <= 1.001; i += 0.01) {
+            const cx = getPos(points[0].x, points[1].x, points[2].x, points[3].x, i);
+            const cy = getPos(points[0].y, points[1].y, points[2].y, points[3].y, i);
+            const cp = toCanvas(cx, cy);
+            ctx.lineTo(cp.x, cp.y);
+        }
+        ctx.stroke();
+
+        // Control Handles (Dashed Lines)
+        ctx.strokeStyle = '#444';
+        ctx.setLineDash([5, 5]);
+        const cp0 = toCanvas(points[0].x, points[0].y);
+        const cp1 = toCanvas(points[1].x, points[1].y);
+        const cp2 = toCanvas(points[2].x, points[2].y);
+        const cp3 = toCanvas(points[3].x, points[3].y);
+        
+        ctx.beginPath(); ctx.moveTo(cp0.x, cp0.y); ctx.lineTo(cp1.x, cp1.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cp2.x, cp2.y); ctx.lineTo(cp3.x, cp3.y); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Points
+        points.forEach((p, i) => {
+            const canvP = toCanvas(p.x, p.y);
+            ctx.fillStyle = (i === 0 || i === 3) ? '#4ec9b0' : '#dcdcaa';
+            ctx.beginPath(); ctx.arc(canvP.x, canvP.y, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#888';
+            ctx.fillText(p.label, canvP.x + 10, canvP.y - 10);
+        });
+
+        // Current Kinematics
+        const curX = getPos(points[0].x, points[1].x, points[2].x, points[3].x, t);
+        const curY = getPos(points[0].y, points[1].y, points[2].y, points[3].y, t);
+        const curV = {
+            x: getVel(points[0].x, points[1].x, points[2].x, points[3].x, t),
+            y: getVel(points[0].y, points[1].y, points[2].y, points[3].y, t)
+        };
+        const curA = {
+            x: getAcc(points[0].x, points[1].x, points[2].x, points[3].x, t),
+            y: getAcc(points[0].y, points[1].y, points[2].y, points[3].y, t)
+        };
+
+        const drawPos = toCanvas(curX, curY);
+
+        // Velocity Vector (Orange)
+        ctx.strokeStyle = '#ce9178';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(drawPos.x, drawPos.y);
+        ctx.lineTo(drawPos.x + curV.x * 0.2, drawPos.y - curV.y * 0.2); // Note: Canvas Y is flipped
+        ctx.stroke();
+
+        // Acceleration Vector (Blue)
+        ctx.strokeStyle = '#569cd6';
+        ctx.beginPath();
+        ctx.moveTo(drawPos.x, drawPos.y);
+        ctx.lineTo(drawPos.x + curA.x * 0.05, drawPos.y - curA.y * 0.05);
+        ctx.stroke();
+
+        // Current Point
+        ctx.fillStyle = '#ff00aa';
+        ctx.beginPath(); ctx.arc(drawPos.x, drawPos.y, 8, 0, Math.PI * 2); ctx.fill();
+
+        updateUI(curX, curY, curV.x, curV.y, curA.x, curA.y);
+    }
+
+    function drawAxes() {
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.font = '10px Arial';
+        ctx.fillStyle = '#666';
+
+        // Grid Lines
+        for(let x = 0; x <= (canvas.width - padding); x += gridSpacing) {
+            ctx.beginPath(); ctx.moveTo(originX + x, 0); ctx.lineTo(originX + x, originY); ctx.stroke();
+            ctx.fillText(x, originX + x - 5, originY + 15);
+        }
+        for(let y = 0; y <= (canvas.height - padding); y += gridSpacing) {
+            ctx.beginPath(); ctx.moveTo(originX, originY - y); ctx.lineTo(canvas.width, originY - y); ctx.stroke();
+            ctx.fillText(y, originX - 30, originY - y + 3);
+        }
+
+        // Main Axes
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 2;
+        // X Axis
+        ctx.beginPath(); ctx.moveTo(originX, originY); ctx.lineTo(canvas.width, originY); ctx.stroke();
+        // Y Axis
+        ctx.beginPath(); ctx.moveTo(originX, originY); ctx.lineTo(originX, 0); ctx.stroke();
+        
+        // Axis Labels
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText("X", canvas.width - 20, originY + 30);
+        ctx.fillText("Y", originX - 30, 20);
+        ctx.fillText("(0,0)", originX - 40, originY + 30);
+    }
+
+    function updateUI(x, y, vx, vy, ax, ay) {
+        document.getElementById('val-x').textContent = x.toFixed(1);
+        document.getElementById('val-y').textContent = y.toFixed(1);
+        document.getElementById('val-vx').textContent = vx.toFixed(1);
+        document.getElementById('val-vy').textContent = vy.toFixed(1);
+        document.getElementById('val-ax').textContent = ax.toFixed(1);
+        document.getElementById('val-ay').textContent = ay.toFixed(1);
+    }
+
+    // --- Interaction ---
+
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        points.forEach((p, i) => {
+            const canvP = toCanvas(p.x, p.y);
+            const dx = mx - canvP.x;
+            const dy = my - canvP.y;
+            if (dx*dx + dy*dy < 144) { // 12px radius
+                isDragging = true;
+                dragIndex = i;
+            }
+        });
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            
+            // Map mouse to Cartesian and clamp to grid area
+            let cart = toCartesian(mx, my);
+            cart.x = Math.max(0, Math.min(canvas.width - padding, cart.x));
+            cart.y = Math.max(0, Math.min(canvas.height - padding, cart.y));
+
+            points[dragIndex].x = cart.x;
+            points[dragIndex].y = cart.y;
+            draw();
+        }
+    });
+
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    tSlider.addEventListener('input', (e) => {
+        t = parseFloat(e.target.value);
+        tDisplay.textContent = t.toFixed(2);
+        draw();
+    });
+
+    document.getElementById('animate-btn').addEventListener('click', () => {
+        let i = 0;
+        const frame = () => {
+            if (i > 1) return;
+            t = i;
+            tSlider.value = i;
+            tDisplay.textContent = i.toFixed(2);
+            draw();
+            i += 0.005;
+            requestAnimationFrame(frame);
+        };
+        frame();
+    });
+
+    draw();
+</script>
+</body>
+</html>
