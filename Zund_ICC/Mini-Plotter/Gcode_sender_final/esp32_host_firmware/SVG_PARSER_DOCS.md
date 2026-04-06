@@ -81,9 +81,25 @@ The converter behavior can be tuned using the following parameters:
     *   *true* = Flips the Y-axis (useful for correcting SVG coordinates where Y+ is down vs. CNC where Y+ is up).
     *   *false* = Standard SVG orientation.
 
+*   **`zUp` & `zDown` (Tangential Knife)**:
+    The Z-axis heights used for lifting the tool during rotation and lowering it for cutting.
+
+*   **`angleThreshold` (Default: 10)**:
+    The maximum angle change allowed between two segments before the machine lifts the tool to rotate it.
+
 ---
 
-## 5. Developer Guide (Code Structure)
+## 5. Tangential Knife Support
+
+The converter includes built-in logic to control a tangential knife (a cutter that must always face the direction of travel). 
+*   **Angle Calculation (`A` Axis)**: The direction of each linear movement is calculated using `Math.atan2`.
+*   **Angle Normalization**: All rotational output is strictly normalized to fall between `0` and `360` degrees, satisfying hardware that doesn't track infinite rotation.
+*   **Sharp Corner Detection**: It calculates the shortest rotational path difference between the current angle and the target angle. If the difference exceeds the `angleThreshold`, it automatically inserts commands to:
+    1. Lift the blade (`Z_UP`),
+    2. Rotate the blade to the new angle,
+    3. Plunge the blade back in (`Z_DOWN`).
+
+## 6. Developer Guide (Code Structure)
 
 For developers maintaining `SvgConverter.js`, the class structure is organized as follows:
 

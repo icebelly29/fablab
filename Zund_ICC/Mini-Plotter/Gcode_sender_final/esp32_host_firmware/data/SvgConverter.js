@@ -54,6 +54,17 @@
  *    The converter automatically detects and deletes "Page Borders" (rectangles
  *    that perfectly match the document size) so your plotter doesn't try to
  *    cut the edge of the paper.
+ * 
+ * 7. TANGENTIAL KNIFE SUPPORT
+ *    Line segments automatically calculate an 'A' parameter (rotation angle). 
+ *    - Angle Calculation: A = Math.atan2(dy, dx) * 180 / PI. This is used to 
+ *      find the physical target heading based on the segment's start and end.
+ *    - Normalization: The raw angle is mathematically wrapped using the formula 
+ *      `((A % 360) + 360) % 360` so it always stays strictly within [0, 360).
+ *    - Shortest Path & Sharp Corners: A shortest rotational difference test is 
+ *      performed. If the heading change exceeds the `angleThreshold`, the 
+ *      system automatically executes a sequence to lift the tool (Z-Up), 
+ *      orient to the new angle, and plunge (Z-Down) to prevent material tearing.
  * ============================================================================
  */
 
@@ -170,7 +181,12 @@ class SvgConverter {
     this.offsetY = options.offsetY || 0;
     this.segmentLength = options.segmentLength || 1.0; 
     this.flipY = options.flipY || false;
-    this.decimals = 6; 
+    this.decimals = 0; 
+    
+    // Tangential knife settings
+    this.zUp = options.zUp !== undefined ? options.zUp : 5;
+    this.zDown = options.zDown !== undefined ? options.zDown : 0;
+    this.angleThreshold = options.angleThreshold !== undefined ? options.angleThreshold : 10;
   }
 
   /**
@@ -452,8 +468,13 @@ class SvgConverter {
     let lastControl = new Vector2(0, 0);
     let lastCmdType = '';
 
-    // Track state to avoid redundant moves
-    let isPenDown = false;
+    // Machine state tracking for tangential knife
+    const state = {
+        isPenDown: false,
+        machineX: 0,
+        machineY: 0,
+        machineA: 0
+    };
 
     commands.forEach(cmd => {
         const isRelative = (cmd.type === cmd.type.toLowerCase());
@@ -467,19 +488,28 @@ class SvgConverter {
         switch (type) {
             case 'M': {
                 const p = getPt(0);
-                // M = Move (Pen Up)
-                // G0 X Y
                 const { x, y } = this.transform(p);
-                gcode.push(`G0 X${x.toFixed(this.decimals)} Y${y.toFixed(this.decimals)}`);
+                
+                // Lift if pen is down
+                if (state.isPenDown) {
+                    gcode.push(`G0 X${state.machineX.toFixed(this.decimals)} Y${state.machineY.toFixed(this.decimals)} Z${this.zUp} A${state.machineA.toFixed(2)}`);
+                }
+                
+                // Move to new position while up
+                gcode.push(`G0 X${x.toFixed(this.decimals)} Y${y.toFixed(this.decimals)} Z${this.zUp} A${state.machineA.toFixed(2)}`);
+                
+                state.machineX = x;
+                state.machineY = y;
+                state.isPenDown = false;
+                
                 cur = p;
                 start = p;
                 lastControl = p;
-                isPenDown = false;
                 break;
             }
             case 'L': {
                 const p = getPt(0);
-                this.emitLinear(gcode, p);
+                this.emitLinear(gcode, state, p);
                 cur = p;
                 lastControl = p;
                 break;
@@ -487,7 +517,7 @@ class SvgConverter {
             case 'H': {
                 const x = isRelative ? cur.x + args[0] : args[0];
                 const p = new Vector2(x, cur.y);
-                this.emitLinear(gcode, p);
+                this.emitLinear(gcode, state, p);
                 cur = p;
                 lastControl = p;
                 break;
@@ -495,7 +525,7 @@ class SvgConverter {
             case 'V': {
                 const y = isRelative ? cur.y + args[0] : args[0];
                 const p = new Vector2(cur.x, y);
-                this.emitLinear(gcode, p);
+                this.emitLinear(gcode, state, p);
                 cur = p;
                 lastControl = p;
                 break;
@@ -505,7 +535,7 @@ class SvgConverter {
                 const c2 = getPt(2);
                 const p = getPt(4);
                 const bezier = new CubicBezier(cur, c1, c2, p);
-                this.flattenBezier(gcode, bezier);
+                this.flattenBezier(gcode, state, bezier);
                 cur = p;
                 lastControl = c2;
                 break;
@@ -518,7 +548,7 @@ class SvgConverter {
                 const c2 = getPt(0);
                 const p = getPt(2);
                 const bezier = new CubicBezier(cur, c1, c2, p);
-                this.flattenBezier(gcode, bezier);
+                this.flattenBezier(gcode, state, bezier);
                 cur = p;
                 lastControl = c2;
                 break;
@@ -529,7 +559,7 @@ class SvgConverter {
                 const cp1 = cur.add(c1.sub(cur).mul(2/3));
                 const cp2 = p.add(c1.sub(p).mul(2/3));
                 const bezier = new CubicBezier(cur, cp1, cp2, p);
-                this.flattenBezier(gcode, bezier);
+                this.flattenBezier(gcode, state, bezier);
                 cur = p;
                 lastControl = c1;
                 break;
@@ -543,13 +573,13 @@ class SvgConverter {
                  const cp1 = cur.add(c1.sub(cur).mul(2/3));
                 const cp2 = p.add(c1.sub(p).mul(2/3));
                 const bezier = new CubicBezier(cur, cp1, cp2, p);
-                this.flattenBezier(gcode, bezier);
+                this.flattenBezier(gcode, state, bezier);
                 cur = p;
                 lastControl = c1;
                 break;
             }
             case 'Z': {
-                this.emitLinear(gcode, start);
+                this.emitLinear(gcode, state, start);
                 cur = start;
                 lastControl = start;
                 break;
@@ -560,7 +590,7 @@ class SvgConverter {
                  // Given the examples use pure G1s, flattening is desired anyway.
                  // TODO: Implement actual arc subdivision for A command.
                  const p = getPt(5);
-                 this.emitLinear(gcode, p);
+                 this.emitLinear(gcode, state, p);
                  cur = p;
                  lastControl = p;
                  break;
@@ -569,17 +599,60 @@ class SvgConverter {
         lastCmdType = type;
     });
 
+    // Lift pen at the end of the drawing
+    if (state.isPenDown) {
+        gcode.push(`G0 X${state.machineX.toFixed(this.decimals)} Y${state.machineY.toFixed(this.decimals)} Z${this.zUp} A${state.machineA.toFixed(2)}`);
+        state.isPenDown = false;
+    }
+
     return gcode;
   }
 
   /**
    * @method emitLinear
-   * @description Helper to generate a G1 linear cut command.
+   * @description Helper to generate a G1 linear cut command with tangential knife support.
    */
-  emitLinear(gcode, p) {
-      // G1 = Cut (Pen Down)
+  emitLinear(gcode, state, p) {
       const { x, y } = this.transform(p);
-      gcode.push(`G1 X${x.toFixed(this.decimals)} Y${y.toFixed(this.decimals)} F${this.feedRate}`);
+      
+      const dx = x - state.machineX;
+      const dy = y - state.machineY;
+      const dSq = dx * dx + dy * dy;
+      
+      // Skip emitting if distance is effectively 0
+      if (dSq < 0.000001) {
+          return;
+      }
+
+      let targetA = Math.atan2(dy, dx) * 180 / Math.PI;
+      
+      // Normalize to 0 .. 360 degrees strictly
+      targetA = ((targetA % 360) + 360) % 360;
+      
+      // Calculate shortest rotation difference for sharp corner detection
+      let diff = targetA - state.machineA;
+      // Normalize to -180 .. 180
+      diff = ((diff + 180) % 360 + 360) % 360 - 180;
+
+      // Ensure 'M' moves start fresh if we are just starting drawing
+      if (!state.isPenDown) {
+          // Orient tool then plunge
+          gcode.push(`G0 X${state.machineX.toFixed(this.decimals)} Y${state.machineY.toFixed(this.decimals)} Z${this.zUp} A${targetA.toFixed(2)}`);
+          gcode.push(`G1 X${state.machineX.toFixed(this.decimals)} Y${state.machineY.toFixed(this.decimals)} Z${this.zDown} A${targetA.toFixed(2)} F${this.feedRate}`);
+          state.isPenDown = true;
+      } else if (Math.abs(diff) > this.angleThreshold) {
+          // Sharp corner: Lift, Rotate, Plunge
+          gcode.push(`G0 X${state.machineX.toFixed(this.decimals)} Y${state.machineY.toFixed(this.decimals)} Z${this.zUp} A${state.machineA.toFixed(2)}`);
+          gcode.push(`G0 X${state.machineX.toFixed(this.decimals)} Y${state.machineY.toFixed(this.decimals)} Z${this.zUp} A${targetA.toFixed(2)}`);
+          gcode.push(`G1 X${state.machineX.toFixed(this.decimals)} Y${state.machineY.toFixed(this.decimals)} Z${this.zDown} A${targetA.toFixed(2)} F${this.feedRate}`);
+      }
+      
+      // Cut to target
+      gcode.push(`G1 X${x.toFixed(this.decimals)} Y${y.toFixed(this.decimals)} Z${this.zDown} A${targetA.toFixed(2)} F${this.feedRate}`);
+      
+      state.machineX = x;
+      state.machineY = y;
+      state.machineA = targetA;
   }
 
   /**
@@ -587,9 +660,10 @@ class SvgConverter {
    * @description Subdivides a Bezier curve into equidistant linear segments.
    * This uses an Arc-Length Parameterization approach (LUT) instead of recursive subdivision.
    * @param {Array} gcode - Output buffer.
+   * @param {Object} state - Machine state for tangential knife.
    * @param {CubicBezier} bezier - The curve to flatten.
    */
-  flattenBezier(gcode, bezier) {
+  flattenBezier(gcode, state, bezier) {
       // 1. Build a Look-Up Table (LUT) to map 't' to 'Distance'
       const steps = 50; // High res sampling to estimate length
       const lut = bezier.getLUT(steps);
@@ -602,7 +676,7 @@ class SvgConverter {
       
       // Prevent division by zero for degenerate curves
       if (numSegments <= 0) {
-          this.emitLinear(gcode, bezier.p3);
+          this.emitLinear(gcode, state, bezier.p3);
           return;
       }
 
@@ -631,7 +705,7 @@ class SvgConverter {
 
           // Sample the exact point at tFound
           const p = bezier.sample(tFound);
-          this.emitLinear(gcode, p);
+          this.emitLinear(gcode, state, p);
       }
       // Ensure the exact end point is hit (the loop covers it, but floating point might drift)
       // Actually, since targetDist eventually equals totalLength, the loop emits the end point.

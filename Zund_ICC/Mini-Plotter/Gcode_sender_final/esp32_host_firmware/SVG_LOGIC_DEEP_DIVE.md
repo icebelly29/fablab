@@ -80,9 +80,14 @@ This process is handled by `flattenBezier` and the recursive `subdivideBezier` m
     *   `if (this.flipY) { y = -y; }` (The Y-axis inversion)
     *   `y += this.offsetY;`
     *   `return { x, y };`
-2.  **G-code Generation**:
-    *   `emitLinear` calls `transform` and formats the result into a `G1` command string: `G1 X${x.toFixed(6)} Y${y.toFixed(6)} F${this.feedRate}`.
-    *   The main `generateGcode` loop handles `M` (Move) commands by calling `transform` and formatting a `G0` command.
+2.  **G-code Generation (and Tangential Knife Logic)**:
+    *   `emitLinear` does more than just format strings; it calculates the tool's rotational angle (`A` axis) required to perform the cut:
+        *   It computes the raw angle using `Math.atan2(dy, dx) * 180 / Math.PI`.
+        *   The angle is then mathematically wrapped to strictly fall between `0` and `360` degrees (`((angle % 360) + 360) % 360`).
+        *   It calculates the shortest rotational distance (difference) to the new angle.
+        *   If the difference exceeds the `angleThreshold` (indicating a sharp corner), `emitLinear` prepends commands to: Lift the knife (`G0 Z... A...`), orient the knife to the new targeted angle, and plunge it into the material (`G1 Z... A... F...`).
+    *   Finally, it formats the main cut move into a `G1` command string: `G1 X${x.toFixed(decimals)} Y${y.toFixed(decimals)} Z... A${targetA.toFixed(2)} F${this.feedRate}`.
+    *   The main `generateGcode` loop handles `M` (Move) commands by calling `transform` to move the knife while keeping it lifted.
 
 ## 3. Network Communication (`Connection.js`)
 
