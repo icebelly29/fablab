@@ -1,9 +1,33 @@
+"""
+===============================================================================
+MISCELLANEOUS COMPUTER VISION UTILITIES
+===============================================================================
+This module provides various utility functions for computer vision tasks,
+including solving affine transformations and saving images with metadata.
+
+LEARNING RESOURCES FOR BEGINNERS:
+---------------------------------
+1. Affine Transformations:
+   - Geometric Transformations: https://docs.opencv.org/4.x/da/d6e/tutorial_py_geometric_transformations.html
+   - Homogeneous Coordinates: https://en.wikipedia.org/wiki/Homogeneous_coordinates
+
+2. PNG File Format:
+   - PNG Specification: https://www.w3.org/TR/2003/REC-PNG-20031110/
+   - DPI in Images: https://en.wikipedia.org/wiki/Dots_per_inch
+
+===============================================================================
+"""
+
 import cv2
 import zlib
 import struct
 import numpy as np
 
 
+# --- 1. SOLVE AFFINE TRANSFORMATION ---
+# Computes the 3x3 affine transformation matrix that maps points from one coordinate system to another.
+# Given corresponding points in two spaces (xy and uv), solves for the transformation matrix.
+# Ref: https://docs.opencv.org/4.x/da/d6e/tutorial_py_geometric_transformations.html
 def solve_affine(xy_array, uv_array):
     if len(xy_array) < 4 or len(uv_array) != len(xy_array):
         raise ValueError(f"Wrong input sizes: should be 4x2 and 4x2")
@@ -31,6 +55,10 @@ def solve_affine(xy_array, uv_array):
     return sol.reshape((3, 3))
 
 
+# --- 2. SAVE PNG WITH DPI ---
+# Saves an image as PNG format with embedded DPI (dots per inch) information.
+# This ensures the image maintains correct scale when opened in other applications.
+# Ref: https://www.w3.org/TR/2003/REC-PNG-20031110/#11pHYs
 def writePNGwithdpi(filename, im, dpi=(72, 72)):
     """Save the image as PNG with embedded dpi"""
 

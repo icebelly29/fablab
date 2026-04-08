@@ -1,6 +1,6 @@
 """
 ===============================================================================
-ARUCO FRAME EXTRACTOR - LEARNING VERSION
+ARUCO FRAME EXTRACTOR 
 ===============================================================================
 This script is a "Smart Digital Scanner." It finds a physical frame in a photo,
 fixes the camera tilt and lens distortion, and saves a perfectly flat, 
@@ -8,11 +8,11 @@ scale-accurate digital image.
 
 LEARNING RESOURCES FOR BEGINNERS:
 ---------------------------------
-1. OpenCV (cv2) - The "Eyes": 
+1. OpenCV (cv2) :
    - ArUco Markers: https://docs.opencv.org/4.x/d5/dae/tutorial_aruco_detection.html
    - Image Transformations: https://docs.opencv.org/4.x/da/d6e/tutorial_py_geometric_transformations.html
 
-2. NumPy (np) - The "Math Brain":
+2. NumPy (np) :
    - Beginner's Guide: https://numpy.org/doc/stable/user/absolute_beginners.html
    - Visual Guide to Arrays: https://jalammar.github.io/visual-numpy/
 

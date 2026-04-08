@@ -1,7 +1,33 @@
+"""
+===============================================================================
+LENS DISTORTION CORRECTION UTILITY
+===============================================================================
+This module provides functions for correcting lens distortion in camera images.
+It implements the Brown-Conrady distortion model for undistorting and distorting
+points, and optimization routines to estimate distortion parameters from known
+3D-2D correspondences.
+
+LEARNING RESOURCES FOR BEGINNERS:
+---------------------------------
+1. Lens Distortion Models:
+   - Brown-Conrady Model: https://en.wikipedia.org/wiki/Distortion_(optics)
+   - Camera Calibration: https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html
+
+2. NumPy (np):
+   - Beginner's Guide: https://numpy.org/doc/stable/user/absolute_beginners.html
+
+3. SciPy Optimization:
+   - Minimize: https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
+===============================================================================
+"""
+
 import numpy as np
 import scipy
 
 
+# --- 1. UNDISTORT POINTS ---
+# This function removes lens distortion from pixel coordinates using the Brown-Conrady model.
+# Ref: https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html
 def undistort(params, uv, f):
     k1, k2 = params[:2]
     uv_c = params[2:4]
@@ -12,6 +38,10 @@ def undistort(params, uv, f):
     return uv_c + (uv - uv_c) * coeff
 
 
+# --- 2. DISTORT POINTS ---
+# This function applies lens distortion to undistorted pixel coordinates (inverse of undistort).
+# Uses numerical optimization to find the distorted points.
+# Ref: https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
 def distort(params, uv, f, print_info=False):
     n_points = len(uv)
 
@@ -29,6 +59,9 @@ def distort(params, uv, f, print_info=False):
     return uv_d
 
 
+# --- 3. COMPUTE PROJECTION ERROR ---
+# Calculates the error between known 3D points (xy) and their projected 2D positions (uv).
+# Used in the optimization loop to measure how well the current parameters fit the data.
 def xy_error(xy, uv, P):
     n_points = len(uv)
 
@@ -43,6 +76,9 @@ def xy_error(xy, uv, P):
     return xy2 - xy
 
 
+# --- 4. LOSS FUNCTION FOR OPTIMIZATION ---
+# Computes the mean squared error (or MAE) between undistorted projections and known 3D points.
+# This is the objective function minimized to find optimal distortion parameters.
 def xy_loss(params, xy, uv, proj, f, use_mae=False):
     uv_u = undistort(params, uv, f)
     err = xy_error(xy, uv_u, proj)
@@ -52,6 +88,10 @@ def xy_loss(params, xy, uv, proj, f, use_mae=False):
         return np.mean(np.sum(err * err, axis=1))
 
 
+# --- 5. SOLVE FOR DISTORTION PARAMETERS ---
+# Estimates lens distortion parameters (k1, k2, center) by minimizing the projection error.
+# Uses known 3D-2D point correspondences and an initial projection matrix.
+# Ref: https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
 def solve_distortion(xy, uv, proj, f, w, h, print_info=False):
     x0 = np.array([0, 0, w / 2, h / 2])
     result = scipy.optimize.minimize(xy_loss, x0, args=(xy, uv, proj, f))
