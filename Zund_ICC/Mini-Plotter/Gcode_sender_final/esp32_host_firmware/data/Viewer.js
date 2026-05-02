@@ -47,7 +47,7 @@
  * @param {string} canvasId - HTML ID of the <canvas> element.
  * @param {string} containerId - HTML ID of the parent div (for sizing).
  */
-export function renderGCode(gcode, canvasId = 'gcodeCanvas', containerId = 'canvasContainer') {
+export function renderGCode(gcode, canvasId = 'gcodeCanvas', containerId = 'canvasContainer', stepsPerMM = 1.0) {
     console.log("Viewer: Rendering G-Code with Sampling Points (v2)"); // Debug log to confirm update
     const canvas = document.getElementById(canvasId);
     const container = document.getElementById(containerId);
@@ -69,13 +69,45 @@ export function renderGCode(gcode, canvasId = 'gcodeCanvas', containerId = 'canv
     const lines = gcode.split('\n');
     const paths = [];
     let cur = { x: 0, y: 0 }; // Current pen position (starts at 0,0)
+    let isPenDown = false; // Track pen state based on relative Z changes
 
     lines.forEach(line => {
         // Remove comments (text after ';') and whitespace
         line = line.split(';')[0].trim().toUpperCase();
         if (!line) return;
 
-        // We only care about Move commands (G0 = Rapid, G1 = Cut)
+        // --- NEW: Trajectory Format ---
+        // Format: X Y Z Vx Vy Vz Angle (Space or Comma separated)
+        if (!line.startsWith('G') && !line.startsWith('M') && (line.includes(',') || line.includes(' '))) {
+            if (line.startsWith('X Y Z') || line.startsWith('XYZ X Y Z')) return; // Skip Header
+
+            const parts = line.split(/[\s,]+/);
+            if (parts.length > 0 && parts[0].toUpperCase() === 'XYZ') {
+                parts.shift(); // Remove the "xyz" prefix
+            }
+
+            if (parts.length >= 3) {
+                const x = parseFloat(parts[0]) / stepsPerMM;
+                const y = parseFloat(parts[1]) / stepsPerMM;
+                const zVal = parseFloat(parts[2]); // Relative Z change
+                
+                if (zVal > 0) isPenDown = true;  // Positive Z means moving Down
+                else if (zVal < 0) isPenDown = false; // Negative Z means moving Up
+                
+                const isMove = !isPenDown;
+                const next = { x, y };
+                
+                paths.push({
+                    type: isMove ? 'move' : 'cut',
+                    from: { ...cur },
+                    to: { ...next }
+                });
+                cur = next;
+            }
+            return;
+        }
+
+        // --- LEGACY: G-Code Format ---
         const isMove = line.startsWith('G0') || line.startsWith('G1');
         if (isMove) {
             // Use Regex to find numbers after X and Y
@@ -83,8 +115,8 @@ export function renderGCode(gcode, canvasId = 'gcodeCanvas', containerId = 'canv
             const yMatch = line.match(/Y([-+]?\d*\.?\d+)/);
             
             const next = { ...cur };
-            if (xMatch) next.x = parseFloat(xMatch[1]);
-            if (yMatch) next.y = parseFloat(yMatch[1]);
+            if (xMatch) next.x = parseFloat(xMatch[1]) / stepsPerMM;
+            if (yMatch) next.y = parseFloat(yMatch[1]) / stepsPerMM;
 
             paths.push({
                 type: line.startsWith('G0') ? 'move' : 'cut',

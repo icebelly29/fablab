@@ -70,12 +70,12 @@ export function setupTabs(getCurrentGCode) {
             document.getElementById('gcodePreview').classList.remove('hidden');
             
             // If we have G-code, draw it!
-            const gcode = getCurrentGCode();
-            if (gcode && gcode.length > 0) {
+            const state = getCurrentGCode(); // Actually returns full state now
+            if (state.gcode && state.gcode.length > 0) {
                 document.getElementById('emptyState').classList.add('hidden');
                 document.getElementById('canvasContainer').classList.remove('hidden');
                 // Small delay to ensure the div is visible before drawing (needed for correct size calc)
-                setTimeout(() => renderGCode(gcode), 10);
+                setTimeout(() => renderGCode(state.gcode, 'gcodeCanvas', 'canvasContainer', state.stepsPerMM), 10);
             } else {
                 document.getElementById('emptyState').classList.remove('hidden');
                 document.getElementById('canvasContainer').classList.add('hidden');

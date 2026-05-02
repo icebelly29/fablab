@@ -56,7 +56,12 @@ import { handleFile } from './FileHandler.js';
 const state = {
     gcodeQueue: [],      // Array holding the lines of G-code waiting to be sent
     isSending: false,    // Flag: to check, Are we currently running a job?
-    gcode: ''            // The full text of the loaded G-code file
+    gcode: '',           // The full text of the loaded G-code file
+    currentFile: null,   // Holds the raw File object to allow re-conversion
+    stepsPerMM: 1.0,     // Conversion factor for Viewer canvas
+    lastSentCmd: null,   // Tracks the last sent trajectory line
+    currentLine: null,   // Tracks the exact string currently being sent
+    wasInterrupted: false // Flags if the job was stopped midway
 };
 
 // --- DOM Elements ---
@@ -66,12 +71,34 @@ const cmdInput = document.getElementById('cmdInput');
 const btnStart = document.getElementById('btnStart');
 const dropZone = document.getElementById('dropZone');
 
+// --- Modal Elements ---
+const configModal = document.getElementById('configModal');
+const btnSettings = document.getElementById('btnSettings');
+const btnCloseModal = document.getElementById('btnCloseModal');
+const stepsPerMMLabel = document.getElementById('stepsPerMMLabel');
+const motorStepsInput = document.getElementById('motorStepsInput');
+const microstepsInput = document.getElementById('microstepsInput');
+const mmPerRevInput = document.getElementById('mmPerRevInput');
+const segmentLengthInput = document.getElementById('segmentLengthInput');
+const segmentLengthSlider = document.getElementById('segmentLengthSlider');
+const cuttingSpeedInput = document.getElementById('cuttingSpeedInput');
+const cuttingSpeedSlider = document.getElementById('cuttingSpeedSlider');
+
 // --- Connection Setup ---
 // Initialize the WebSocket connection. We provide "callbacks" here.
 // Callbacks are functions that run automatically when specific events happen.
 const connection = new MachineConnection({
     // When the machine says "I received the command" (Ack), we send the next one.
     onAck: sendNextLine,
+    
+    // When the machine says "nope" (Buffer Full), retry the current line
+    onNope: () => {
+        if (state.isSending && state.currentLine) {
+            setTimeout(() => {
+                connection.send(state.currentLine);
+            }, 50); // Small 50ms delay to prevent serial flooding
+        }
+    },
     
     // If the connection drops mid-job, we must stop everything for safety.
     onDisconnect: stopJob
@@ -98,6 +125,30 @@ function startJob() {
     
     if (state.gcodeQueue.length === 0) return;
 
+    // --- SAFE RETRACT INJECTION ---
+    // If the machine was stopped mid-job, it might still have the pen down.
+    // We inject a pure vertical lift at its last known position before starting.
+    if (state.wasInterrupted && state.lastSentCmd) {
+        const parts = state.lastSentCmd.split(/[\s,]+/);
+        if (parts.length >= 8 && parts[0].toLowerCase() === 'xyz') {
+            const lastX = parts[1];
+            const lastY = parts[2];
+            const lastAngle = parts[7];
+            
+            // Assume zUp is 5mm, multiply by stepsPerMM
+            const zUpStep = Math.round(5 * state.stepsPerMM);
+            
+            // Inject a pure vertical lift at the exact last known location
+            // Negative Z means "Up" in the relative coordinate system
+            const retractCmd = `xyz ${lastX} ${lastY} -${zUpStep} 0 0 0 ${lastAngle}`;
+            
+            state.gcodeQueue.unshift(retractCmd);
+            log(`Injected Safe Retract at X:${lastX} Y:${lastY}`, 'info');
+        }
+    }
+    
+    state.wasInterrupted = false;
+
     log(`Starting Job: ${state.gcodeQueue.length} lines.`, 'success');
     
     // 2. Update State
@@ -117,8 +168,9 @@ function stopJob() {
     
     state.isSending = false;
     state.gcodeQueue = []; // Delete all remaining commands
+    state.wasInterrupted = true; // Mark that it was stopped mid-way
     
-    log('Job Stopped.', 'error');
+    log('Job Stopped. Position saved for safe retract on restart.', 'error');
     setStartButtonState(false); // Turn button back to Green/Start
 }
 
@@ -139,9 +191,15 @@ function sendNextLine() {
     if (!state.isSending) return;
 
     if (state.gcodeQueue.length > 0) {
-        const line = state.gcodeQueue.shift(); // Remove first item from array
-        connection.send(line);
-        log(`> ${line}`, 'tx'); 
+        state.currentLine = state.gcodeQueue.shift(); // Remove first item from array
+        
+        // Track the last physical position sent
+        if (state.currentLine.toLowerCase().startsWith('xyz') && !state.currentLine.includes('X Y Z')) {
+            state.lastSentCmd = state.currentLine;
+        }
+
+        connection.send(state.currentLine);
+        log(`> ${state.currentLine}`, 'tx'); 
     } else {
         finishJob();
     }
@@ -169,9 +227,15 @@ btnStart.addEventListener('click', () => {
 });
 
 // 2. Manual Command Input (The text box at the bottom)
+const cmdHistory = [];
+let cmdHistoryIndex = -1;
+
 function handleManualSend() {
     const cmd = cmdInput.value.trim();
     if (!cmd) return;
+
+    cmdHistory.push(cmd);
+    cmdHistoryIndex = cmdHistory.length;
 
     // Special command to clear the screen
     if (cmd.toLowerCase() === 'clear' || cmd.toLowerCase() === '/clear') {
@@ -187,13 +251,37 @@ function handleManualSend() {
 // Wire up the manual input buttons/keys
 document.getElementById('btnClear').addEventListener('click', clearConsole);
 document.getElementById('btnRun').addEventListener('click', handleManualSend);
-cmdInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') handleManualSend();
+cmdInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        handleManualSend();
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault(); // Prevent cursor from moving to start
+        if (cmdHistory.length > 0 && cmdHistoryIndex > 0) {
+            cmdHistoryIndex--;
+            cmdInput.value = cmdHistory[cmdHistoryIndex];
+        }
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (cmdHistory.length > 0 && cmdHistoryIndex < cmdHistory.length - 1) {
+            cmdHistoryIndex++;
+            cmdInput.value = cmdHistory[cmdHistoryIndex];
+        } else {
+            cmdHistoryIndex = cmdHistory.length;
+            cmdInput.value = '';
+        }
+    }
 });
 
-// 3. Reconnect on Badge Click
+// 3. Reconnect on Badge Click or Connect Button
 // If user clicks the "Disconnected" red badge, try to reconnect.
 document.getElementById('statusBadge').addEventListener('click', () => connection.connect());
+document.getElementById('btnConnect').addEventListener('click', () => {
+    if (connection.connected) {
+        connection.disconnect();
+    } else {
+        connection.connect();
+    }
+});
 
 // 4. Sync Editor changes
 // When user types in the editor, update our global variable so the preview knows.
@@ -204,27 +292,94 @@ editor.addEventListener('input', () => {
 // --- Initialization ---
 
 // Setup the Tab clicking logic (Preview vs Editor)
-setupTabs(() => state.gcode);
+setupTabs(() => state);
 
 // Handle Window Resize
 // If the window size changes, we need to redraw the canvas so it doesn't look stretched.
 window.addEventListener('resize', () => {
     if (state.gcode && !document.getElementById('canvasContainer').classList.contains('hidden')) {
-         requestAnimationFrame(() => renderGCode(state.gcode));
+         requestAnimationFrame(() => renderGCode(state.gcode, 'gcodeCanvas', 'canvasContainer', state.stepsPerMM));
     }
 });
 
 // --- File Handling Setup ---
 
 // Callback: What to do when a file is processed and ready?
-const onGCodeReady = (newGCode) => {
+const onGCodeReady = (newGCode, stepsPerMM = 1.0) => {
     state.gcode = newGCode;
+    state.stepsPerMM = stepsPerMM;
     editor.value = newGCode;
+    state.wasInterrupted = false; // Reset interruption flag on new file
+    state.lastSentCmd = null; // Clear last known position
 };
 
 // Handle "Open File" button
 document.getElementById('fileInput').addEventListener('change', (e) => {
-    handleFile(e.target.files[0], onGCodeReady, window.switchTab);
+    state.currentFile = e.target.files[0];
+    handleFile(state.currentFile, onGCodeReady, window.switchTab);
+});
+
+// Handle Dynamic Configuration Changes
+const retriggerConversion = () => {
+    updateStepsPerMMLabel();
+    if (state.currentFile && state.currentFile.name.toLowerCase().endsWith('.svg')) {
+        log('Re-calculating trajectory with new settings...', 'info');
+        handleFile(state.currentFile, onGCodeReady, window.switchTab);
+    }
+};
+
+const updateStepsPerMMLabel = () => {
+    const motorSteps = parseFloat(motorStepsInput.value) || 200;
+    const microsteps = parseFloat(microstepsInput.value) || 16;
+    const mmPerRev = parseFloat(mmPerRevInput.value) || 40;
+    let stepsPerMM = (motorSteps * microsteps) / mmPerRev;
+    if (isNaN(stepsPerMM) || stepsPerMM <= 0) stepsPerMM = 1.0;
+    stepsPerMMLabel.textContent = stepsPerMM.toFixed(2);
+};
+
+segmentLengthSlider.addEventListener('input', (e) => {
+    segmentLengthInput.value = e.target.value;
+});
+segmentLengthInput.addEventListener('input', (e) => {
+    segmentLengthSlider.value = e.target.value;
+});
+
+cuttingSpeedSlider.addEventListener('input', (e) => {
+    cuttingSpeedInput.value = e.target.value;
+});
+cuttingSpeedInput.addEventListener('input', (e) => {
+    cuttingSpeedSlider.value = e.target.value;
+});
+
+segmentLengthSlider.addEventListener('change', retriggerConversion);
+segmentLengthInput.addEventListener('change', retriggerConversion);
+cuttingSpeedSlider.addEventListener('change', retriggerConversion);
+cuttingSpeedInput.addEventListener('change', retriggerConversion);
+motorStepsInput.addEventListener('change', retriggerConversion);
+motorStepsInput.addEventListener('input', updateStepsPerMMLabel);
+microstepsInput.addEventListener('change', retriggerConversion);
+microstepsInput.addEventListener('input', updateStepsPerMMLabel);
+mmPerRevInput.addEventListener('change', retriggerConversion);
+mmPerRevInput.addEventListener('input', updateStepsPerMMLabel);
+
+// Initialize Label
+updateStepsPerMMLabel();
+
+// Modal Logic
+btnSettings.addEventListener('click', () => {
+    configModal.classList.remove('hidden');
+    // small delay to allow display:block to apply before animating opacity
+    setTimeout(() => configModal.classList.add('visible'), 10);
+});
+
+const closeModal = () => {
+    configModal.classList.remove('visible');
+    setTimeout(() => configModal.classList.add('hidden'), 300); // match transition duration
+};
+
+btnCloseModal.addEventListener('click', closeModal);
+configModal.addEventListener('click', (e) => {
+    if (e.target === configModal) closeModal();
 });
 
 // Handle Drag & Drop
@@ -248,8 +403,9 @@ dropZone.addEventListener('dragleave', () => {
 // Handle the Drop
 dropZone.addEventListener('drop', (e) => {
     document.querySelectorAll('.empty-state').forEach(el => el.classList.remove('drag-over'));
-    handleFile(e.dataTransfer.files[0], onGCodeReady, window.switchTab);
+    state.currentFile = e.dataTransfer.files[0];
+    handleFile(state.currentFile, onGCodeReady, window.switchTab);
 });
 
-// Start the connection immediately when page loads
-connection.connect();
+// Connection requires a user gesture for WebSerial, so we don't auto-connect
+// on page load anymore.

@@ -1,0 +1,10 @@
+fastapi==0.103.1
+uvicorn==0.23.2
+websockets==11.0.3
+opencv-python-headless>=4.10.0
+numpy>=2.1.0
+pyserial==3.5
+pyserial-asyncio>=0.6
+# PyTurboJPEG is used for hardware accelerated JPEG encoding
+PyTurboJPEG==1.7.1
+# Note: YOLO/TFLite/NCNN dependencies are device-specific and usually installed manually on the Pi

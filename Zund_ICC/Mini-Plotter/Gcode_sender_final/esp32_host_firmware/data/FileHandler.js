@@ -171,17 +171,38 @@ export async function handleFile(file, onGCodeReady, onSwitchTab) {
             const finalOffsetY = offsetY + (vbMinY + vbH) * scale;
 
             try {
+                // Get segment length from UI
+                const segInput = document.getElementById('segmentLengthInput');
+                let segLength = segInput ? parseFloat(segInput.value) : 1.0;
+                if (isNaN(segLength) || segLength < 0.1) segLength = 0.1;
+
+                // Calculate Steps per MM
+                const motorStepsInput = document.getElementById('motorStepsInput');
+                const microstepsInput = document.getElementById('microstepsInput');
+                const mmPerRevInput = document.getElementById('mmPerRevInput');
+                const cuttingSpeedInput = document.getElementById('cuttingSpeedInput');
+
+                const motorSteps = motorStepsInput ? parseFloat(motorStepsInput.value) : 200;
+                const microsteps = microstepsInput ? parseFloat(microstepsInput.value) : 16;
+                const mmPerRev = mmPerRevInput ? parseFloat(mmPerRevInput.value) : 40;
+                const cuttingSpeed = cuttingSpeedInput ? parseFloat(cuttingSpeedInput.value) : 30;
+
+                let stepsPerMM = (motorSteps * microsteps) / mmPerRev;
+                if (isNaN(stepsPerMM) || stepsPerMM <= 0) stepsPerMM = 1.0;
+
                 // Run the conversion!
                 const converter = new SvgConverter({
-                    feedRate: 1000, 
+                    feedRate: cuttingSpeed, 
                     scale: scale,
                     offsetX: finalOffsetX,
                     offsetY: finalOffsetY,
+                    segmentLength: segLength,
+                    stepsPerMM: stepsPerMM,
                     flipY: true
                 });
                 const gcode = converter.convert(text);
                 
-                onGCodeReady(gcode);
+                onGCodeReady(gcode, stepsPerMM);
                 log(`Converted (Size: ${finalW.toFixed(1)}x${finalH.toFixed(1)}mm)`, 'success');
                 onSwitchTab('gcode-preview');
             } catch (err) {

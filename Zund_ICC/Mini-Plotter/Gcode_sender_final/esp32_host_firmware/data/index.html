@@ -28,11 +28,11 @@
         </div>
         <div class="console-output" id="consoleOutput">
             <div class="console-line log-info">System initialized...</div>
-            <div class="console-line log-info">Ready to connect.</div>
+            <div class="console-line log-info">Click 'Connect Serial' to connect to Pico.</div>
         </div>
         <div class="console-input-area">
             <span class="console-prefix">&gt;</span>
-            <input type="text" id="cmdInput" placeholder="Type G-Code..." autocomplete="off">
+            <input type="text" id="cmdInput" placeholder="Type command..." autocomplete="off">
             <button class="btn btn-primary" id="btnRun">Run</button>
         </div>
     </section>
@@ -41,14 +41,17 @@
     <section class="workspace-panel">
         <div class="toolbar">
             <div class="tabs">
-                <div class="tab active" onclick="switchTab('gcode-preview')">G-Code Preview</div>
+                <div class="tab active" onclick="switchTab('gcode-preview')">Trajectory Preview</div>
                 <div class="tab" onclick="switchTab('svg-preview')">SVG Preview</div>
-                <div class="tab" onclick="switchTab('editor')">G-Code Editor</div>
+                <div class="tab" onclick="switchTab('editor')">Data Editor</div>
             </div>
-            <div class="actions">
-                <input type="file" id="fileInput" accept=".gcode,.svg" style="display: none;">
+            <div class="actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                <button class="btn btn-action" id="btnSettings" title="Machine Configuration">⚙️ Settings</button>
+
+                <input type="file" id="fileInput" accept=".txt,.csv,.gcode,.svg" style="display: none;">
+                <button class="btn btn-action" id="btnConnect">Connect Serial</button>
                 <button class="btn btn-action" onclick="document.getElementById('fileInput').click()">Load File</button>
-                <button class="btn btn-start" id="btnStart" disabled>Start Cutting</button>
+                <button class="btn btn-start" id="btnStart" disabled>Start</button>
             </div>
         </div>
 
@@ -58,7 +61,7 @@
                 <div id="emptyState" class="empty-state" onclick="document.getElementById('fileInput').click()">
                     <div class="empty-icon">📂</div>
                     <div class="empty-text">Drag & Drop Files Here</div>
-                    <div class="empty-subtext">Supports .gcode, .svg</div>
+                    <div class="empty-subtext">Supports .txt, .csv, .svg</div>
                 </div>
                 <div id="canvasContainer" class="hidden" style="width:100%; height:100%; display:flex; justify-content:center; align-items:center; overflow:hidden;">
                     <canvas id="gcodeCanvas"></canvas>
@@ -75,10 +78,58 @@
             </div>
 
             <!-- Editor Tab -->
-            <textarea id="gcodeEditor" class="view-panel hidden" spellcheck="false" placeholder="G-Code will appear here..."></textarea>
+            <textarea id="gcodeEditor" class="view-panel hidden" spellcheck="false" placeholder="Trajectory Data will appear here..."></textarea>
         </div>
     </section>
 </main>
+
+<!-- Configuration Modal -->
+<div id="configModal" class="modal-overlay hidden">
+    <div class="modal-content glass-panel">
+        <div class="modal-header">
+            <h2>Machine Configuration</h2>
+            <button id="btnCloseModal" class="btn-icon">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="segmentLengthInput">Segment Length (mm):</label>
+                <div class="slider-input-group">
+                    <input type="range" id="segmentLengthSlider" value="1.0" step="0.1" min="0.1" max="10.0">
+                    <input type="number" id="segmentLengthInput" value="1.0" step="0.1" min="0.1" max="10.0">
+                </div>
+                <span class="help-text">Subdivision length for trajectory paths. Smaller is smoother but larger file.</span>
+            </div>
+            <div class="form-group">
+                <label for="cuttingSpeedInput">Cutting Speed (mm/sec):</label>
+                <div class="slider-input-group">
+                    <input type="range" id="cuttingSpeedSlider" value="30" step="1" min="1" max="200">
+                    <input type="number" id="cuttingSpeedInput" value="30" step="1" min="1" max="200">
+                </div>
+                <span class="help-text">Target speed for cutting moves (normalized velocity).</span>
+            </div>
+            <hr class="modal-divider">
+            <div class="form-group">
+                <label for="motorStepsInput">Motor Steps per Revolution:</label>
+                <input type="number" id="motorStepsInput" value="200" step="1" min="1">
+                <span class="help-text">Typically 200 for a 1.8&deg; stepper motor.</span>
+            </div>
+            <div class="form-group">
+                <label for="microstepsInput">Microstepping:</label>
+                <input type="number" id="microstepsInput" value="16" step="1" min="1">
+                <span class="help-text">Driver microstepping configuration (e.g., 16, 32).</span>
+            </div>
+            <div class="form-group">
+                <label for="mmPerRevInput">Millimeters per Revolution:</label>
+                <input type="number" id="mmPerRevInput" value="40" step="1" min="1">
+                <span class="help-text">Linear travel distance per full rotation.</span>
+            </div>
+            <div class="form-group result-group">
+                <label>Calculated Steps per MM:</label>
+                <div id="stepsPerMMLabel" class="calc-result">80.00</div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script type="module" src="script.js"></script>
 

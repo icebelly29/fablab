@@ -1,115 +1,61 @@
 /**
  * ============================================================================
- *                       NETWORK COMMUNICATIONS (WEBSOCKETS)
+ *                       NETWORK COMMUNICATIONS (WEBSERIAL)
  * ============================================================================
  * 
  * This module manages the real-time link between the browser (User Interface)
- * and the ESP32 microcontroller (The Machine).
- * 
- * WHY WEBSOCKETS?
- * Unlike standard HTTP requests (like loading a webpage), WebSockets keep a 
- * "pipe" open constantly. This allows:
- * 1. Instant commands: When you press "Jog Left", the machine moves immediately.
- * 2. Real-time feedback: The machine can tell us "I'm done" or "Error" without
- *    us asking for updates constantly.
- * 
- * HOW IT WORKS:
- * 1. Connection: It attempts to connect to the ESP32's IP address on Port 81.
- *    - If running locally (laptop), it looks for a test server at localhost:8080.
- * 2. Protocol: We speak JSON (JavaScript Object Notation).
- *    - Sending: { "type": "gcode", "data": "G0 X10" }
- *    - Receiving: { "type": "ack", "data": "ok" } or { "type": "serial", ... }
- * 3. Flow Control:
- *    We wait for an "ack" (acknowledgment) from the machine before sending the 
- *    next line of a large file. This prevents overflowing the machine's tiny brain.
+ * and the Raspberry Pi Pico over USB Serial.
  * 
  * ============================================================================
  */
 
-/**
- * @file Connection.js
- * @description NETWORK COMMUNICATIONS
- * 
- * This module handles talking to the ESP32.
- * We use "WebSockets" instead of standard HTTP requests because WebSockets allow
- * for two-way, real-time communication. The machine can talk back to us instantly!
- */
-
 import { log } from './Console.js';
-import { updateStatus, updateUserCount } from './UI.js';
+import { updateStatus } from './UI.js';
 
 export class MachineConnection {
-    /**
-     * @constructor
-     * @param {Object} callbacks - Functions to run when events happen.
-     *                             e.g. { onAck: function(){...} }
-     */
     constructor(callbacks) {
-        this.socket = null;      // Holds the active connection object
-        this.connected = false;  // Simple flag to check status
-        this.callbacks = callbacks || {}; 
+        this.port = null;
+        this.reader = null;
+        this.writer = null;
+        this.connected = false;
+        this.callbacks = callbacks || {};
+        this.keepReading = true;
     }
 
     /**
      * CONNECT
-     * Initiates the connection to the machine.
+     * Initiates the connection via Web Serial API.
      */
-    connect() {
+    async connect() {
         if (this.connected) return;
 
-        log('Connecting to Machine...', 'info');
-        
-        // --- Hostname Logic ---
-        // 1. If we are running this file directly from the ESP32 (in AP mode), 
-        //    window.location.hostname will be the IP of the ESP32 (e.g., 192.168.4.1).
-        // 2. If we are testing on our laptop ('localhost'), we need to tell it 
-        //    where the fake server is (localhost:8080).
-        const hostname = window.location.hostname;
-        const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
-        
-        // Port 81 is defined in the Arduino sketch for WebSockets.
-        const wsUrl = isLocal ? "ws://localhost:8080" : `ws://${hostname}:81`;
+        if (!('serial' in navigator)) {
+            log('Web Serial API not supported in this browser. Please use Chrome/Edge.', 'error');
+            return;
+        }
 
         try {
-            // Create the WebSocket object
-            this.socket = new WebSocket(wsUrl);
+            // Prompt user to select a port
+            this.port = await navigator.serial.requestPort();
+            
+            // Open the port at 115200 baud
+            await this.port.open({ baudRate: 115200 });
 
-            // --- Event: Connection Opened ---
-            this.socket.onopen = () => {
-                this.connected = true;
-                updateStatus(true); // Turn badge Green
-                log(`Connected to ${wsUrl}`, 'success');
-            };
+            this.connected = true;
+            updateStatus(true);
+            log('Connected to Serial Port', 'success');
 
-            // --- Event: Message Received ---
-            this.socket.onmessage = (event) => {
-                try {
-                    // The machine sends data as text. We expect it to be JSON format.
-                    // JSON Example: { "type": "serial", "data": "ok" }
-                    const msg = JSON.parse(event.data);
-                    this.handleMessage(msg);
-                } catch (e) {
-                    log(`Invalid JSON: ${event.data}`, 'error');
-                }
-            };
+            // Setup the text encoder/decoder streams
+            const textDecoder = new TextDecoderStream();
+            this.readableStreamClosed = this.port.readable.pipeTo(textDecoder.writable);
+            this.reader = textDecoder.readable.getReader();
 
-            // --- Event: Connection Lost ---
-            this.socket.onclose = (event) => {
-                this.connected = false;
-                updateStatus(false); // Turn badge Red
-                let reason = event.reason ? ` Reason: ${event.reason}` : '';
-                log(`Disconnected (Code: ${event.code}).${reason}`, 'error');
-                this.socket = null;
-                
-                // Tell the main script we disconnected (so it can stop the job)
-                if (this.callbacks.onDisconnect) this.callbacks.onDisconnect();
-            };
+            const textEncoder = new TextEncoderStream();
+            this.writableStreamClosed = textEncoder.readable.pipeTo(this.port.writable);
+            this.writer = textEncoder.writable.getWriter();
 
-            // --- Event: Error ---
-            this.socket.onerror = (err) => {
-                console.error("WebSocket Error:", err);
-                log(`Connection Error. Check console for details.`, 'error');
-            };
+            this.keepReading = true;
+            this.readLoop();
 
         } catch (e) {
             log(`Connection failed: ${e.message}`, 'error');
@@ -117,61 +63,87 @@ export class MachineConnection {
     }
 
     /**
+     * DISCONNECT
+     */
+    async disconnect() {
+        this.keepReading = false;
+        if (this.reader) {
+            await this.reader.cancel();
+        }
+        if (this.writer) {
+            await this.writer.close();
+        }
+        if (this.port) {
+            await this.port.close();
+        }
+        this.connected = false;
+        updateStatus(false);
+        log('Disconnected from Serial Port', 'info');
+        if (this.callbacks.onDisconnect) this.callbacks.onDisconnect();
+    }
+
+    /**
+     * READ LOOP
+     * Continuously reads data from the serial port.
+     */
+    async readLoop() {
+        let buffer = '';
+        try {
+            while (this.port.readable && this.keepReading) {
+                const { value, done } = await this.reader.read();
+                if (done) break;
+                
+                buffer += value;
+                let lines = buffer.split('\n');
+                // The last element is either empty string or an incomplete line
+                buffer = lines.pop(); 
+
+                for (let line of lines) {
+                    this.handleMessage(line.trim());
+                }
+            }
+        } catch (error) {
+            log(`Serial Read Error: ${error.message}`, 'error');
+        } finally {
+            this.reader.releaseLock();
+        }
+    }
+
+    /**
      * HANDLE MESSAGE
-     * Decides what to do based on the "type" of message received.
-     * 
-     * @param {Object} msg - The parsed message object.
+     * Parses incoming strings from the Pico.
      */
     handleMessage(msg) {
-        switch (msg.type) {
-            case 'ack':
-                // "ack" = Acknowledge. The machine is saying "I finished the last command".
-                // We should tell the main script to send the next one.
-                if (this.callbacks.onAck) this.callbacks.onAck();
-                break;
-            
-            case 'serial':
-                // "serial" = Raw text from the CNC controller (GRBL/Marlin/etc).
-                // We just log this to the screen so the user can see it.
-                log(`ESP32: ${msg.data}`, 'info');
-                
-                // Fallback: Some machines send "READY" or "OK" text instead of a specific "ack" event.
-                if (msg.data.toUpperCase().includes('READY')) {
-                    if (this.callbacks.onAck) this.callbacks.onAck();
-                }
-                break;
-            
-            case 'error':
-                log(`Error: ${msg.data}`, 'error');
-                break;
-            
-            case 'userCount':
-                // Updates the "Users Online" count in the header.
-                updateUserCount(msg.count);
-                break;
-            
-            default:
-                console.log('Unknown msg:', msg);
+        if (!msg) return;
+
+        if (msg.toLowerCase() === 'ok' || msg.toLowerCase() === 'ack' || msg.toLowerCase() === 'ready') {
+            log(`PICO: ${msg}`, 'success'); // Display the OK in the console
+            if (this.callbacks.onAck) this.callbacks.onAck();
+        } else if (msg.toLowerCase() === 'nope') {
+            log(`PICO: ${msg} (Buffer full, retrying...)`, 'warning');
+            if (this.callbacks.onNope) this.callbacks.onNope();
+        } else {
+            // Otherwise just log it
+            log(`PICO: ${msg}`, 'info');
         }
     }
 
     /**
      * SEND COMMAND
-     * Sends a G-code string to the ESP32.
-     * 
-     * @param {string} cmd - The G-code command (e.g. "G1 X10 Y10").
-     * @param {boolean} [isManual=false] - If true, we log it as a user-typed command.
+     * Sends a string to the Pico over Serial.
      */
-    send(cmd, isManual = false) {
-        if (!this.connected || !this.socket) {
+    async send(cmd, isManual = false) {
+        if (!this.connected || !this.writer) {
             log('Error: Not connected', 'error');
             return;
         }
         
-        // Wrap the command in JSON so the ESP32 knows it's G-code.
-        const payload = JSON.stringify({ type: 'gcode', data: cmd });
-        this.socket.send(payload);
-        
-        if (isManual) log(`> ${cmd}`, 'tx');
+        try {
+            // Send the command with a newline
+            await this.writer.write(cmd + '\n');
+            if (isManual) log(`> ${cmd}`, 'tx');
+        } catch (e) {
+            log(`Send error: ${e.message}`, 'error');
+        }
     }
 }

@@ -91,6 +91,8 @@ def find_working_camera():
         cap.release()
     return -1
 
+
+
 def main():
     print("Initializing camera feed...")
     
@@ -123,6 +125,9 @@ def main():
     print("Press 'q' to quit.")
     
     failed_frames = 0
+    last_ppm = None
+    last_gcode_time = 0
+    
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -140,33 +145,16 @@ def main():
         ppm, marker_corners, M = calculate_pixels_per_mm(frame)
         
         if ppm is not None:
-            # 1. FLAT FLATTENED OUTPUT
-            # Warp the entire frame using the homography matrix
-            h, w = frame.shape[:2]
-            flattened = cv2.warpPerspective(frame, M, (w, h))
+            last_ppm = ppm
 
             # Draw on original frame
             int_corners = np.int32(marker_corners)
             cv2.polylines(frame, [int_corners], True, (0, 255, 0), 2)
             cv2.putText(frame, f"Raw PPM: {ppm:.2f} px/mm",
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-            cv2.putText(frame, "Showing Flattened Perspective...",
-                        (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
-
-            # Draw grid/info on flattened frame
-            cv2.putText(flattened, f"LOCKED PPM: {TARGET_PPM} px/mm",
-                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-            
-            cv2.imshow("Flattened (Bird's Eye)", flattened)
         else:
             cv2.putText(frame,f"Waiting for marker id {MARKER_ID}...",
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-            
-            # Destroy the flattened window if marker is lost to avoid stale frames
-            try:
-                cv2.destroyWindow("Flattened (Bird's Eye)")
-            except:
-                pass
 
         # Draw a central crosshair on the raw frame for physical alignment
         fh, fw = frame.shape[:2]
@@ -176,6 +164,44 @@ def main():
         cv2.line(frame, (cx, cy - cross_size), (cx, cy + cross_size), (0, 255, 255), 1)  # Yellow vertical
         # Small center dot
         cv2.circle(frame, (cx, cy), 2, (0, 0, 255), -1)
+
+        # --- ArUco Marker Centering and G-Code Generation ---
+        if ppm is not None and last_ppm is not None and last_ppm > 0:
+            # We have the marker in view
+            marker_center = marker_corners.mean(axis=0)
+            target_x, target_y = int(marker_center[0]), int(marker_center[1])
+            
+            # Draw the detected target center
+            cv2.circle(frame, (target_x, target_y), 8, (255, 0, 255), 2)
+            cv2.line(frame, (target_x - 10, target_y), (target_x + 10, target_y), (255, 0, 255), 2)
+            cv2.line(frame, (target_x, target_y - 10), (target_x, target_y + 10), (255, 0, 255), 2)
+            
+            # Distance from image center (camera center)
+            dx_px = target_x - cx
+            dy_px = target_y - cy
+            
+            cv2.putText(frame, f"Marker Offset: X={dx_px}px, Y={dy_px}px", 
+                        (10, fh - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
+            
+            dx_mm = dx_px / last_ppm
+            # Assuming typical CNC: positive Y is "up" in real world, but image Y goes "down".
+            # If marker is below center (dy_px > 0), camera needs to move -Y.
+            dy_mm = - (dy_px / last_ppm) 
+            
+            cv2.putText(frame, f"Move: X={dx_mm:.2f}mm, Y={dy_mm:.2f}mm", 
+                        (10, fh - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
+            
+            # Print G-code throttled (e.g., every 3 seconds)
+            current_time = time.time()
+            if current_time - last_gcode_time > 3.0:
+                # Only print if we are off by more than 0.2mm
+                if abs(dx_mm) > 0.2 or abs(dy_mm) > 0.2:
+                    print(f"\n--- G-Code to align camera to marker ---")
+                    print(f"G21 ; Set units to millimeters")
+                    print(f"G91 ; Relative positioning")
+                    print(f"G0 X{dx_mm:.3f} Y{dy_mm:.3f} F1000 ; Move gantry to center")
+                    print(f"G90 ; Absolute positioning")
+                    last_gcode_time = current_time
 
         # Show the primary window
         cv2.imshow("Raw Camera Feed", frame)
