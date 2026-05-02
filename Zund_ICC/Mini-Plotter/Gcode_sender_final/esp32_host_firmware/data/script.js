@@ -61,7 +61,8 @@ const state = {
     stepsPerMM: 1.0,     // Conversion factor for Viewer canvas
     lastSentCmd: null,   // Tracks the last sent trajectory line
     currentLine: null,   // Tracks the exact string currently being sent
-    wasInterrupted: false // Flags if the job was stopped midway
+    wasInterrupted: false, // Flags if the job was stopped midway
+    isWaitingForReady: false // Flag to wait for Pico's "ready" when buffer is full
 };
 
 // --- DOM Elements ---
@@ -83,6 +84,8 @@ const segmentLengthInput = document.getElementById('segmentLengthInput');
 const segmentLengthSlider = document.getElementById('segmentLengthSlider');
 const cuttingSpeedInput = document.getElementById('cuttingSpeedInput');
 const cuttingSpeedSlider = document.getElementById('cuttingSpeedSlider');
+const zStepsPerMMInput = document.getElementById('zStepsPerMMInput');
+const rotaryStepsPerDegInput = document.getElementById('rotaryStepsPerDegInput');
 
 // --- Connection Setup ---
 // Initialize the WebSocket connection. We provide "callbacks" here.
@@ -91,12 +94,18 @@ const connection = new MachineConnection({
     // When the machine says "I received the command" (Ack), we send the next one.
     onAck: sendNextLine,
     
-    // When the machine says "nope" (Buffer Full), retry the current line
+    // When the machine says "nope" (Buffer Full), pause sending and wait for "ready"
     onNope: () => {
-        if (state.isSending && state.currentLine) {
-            setTimeout(() => {
-                connection.send(state.currentLine);
-            }, 50); // Small 50ms delay to prevent serial flooding
+        if (state.isSending) {
+            state.isWaitingForReady = true;
+        }
+    },
+    
+    // When the machine is ready after a buffer full, resume sending
+    onReady: () => {
+        if (state.isSending && state.isWaitingForReady && state.currentLine) {
+            state.isWaitingForReady = false;
+            connection.send(state.currentLine);
         }
     },
     
@@ -361,6 +370,8 @@ microstepsInput.addEventListener('change', retriggerConversion);
 microstepsInput.addEventListener('input', updateStepsPerMMLabel);
 mmPerRevInput.addEventListener('change', retriggerConversion);
 mmPerRevInput.addEventListener('input', updateStepsPerMMLabel);
+zStepsPerMMInput.addEventListener('change', retriggerConversion);
+rotaryStepsPerDegInput.addEventListener('change', retriggerConversion);
 
 // Initialize Label
 updateStepsPerMMLabel();

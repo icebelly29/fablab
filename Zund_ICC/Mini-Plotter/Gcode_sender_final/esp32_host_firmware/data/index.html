@@ -115,13 +115,24 @@
             </div>
             <div class="form-group">
                 <label for="microstepsInput">Microstepping:</label>
-                <input type="number" id="microstepsInput" value="16" step="1" min="1">
+                <input type="number" id="microstepsInput" value="32" step="1" min="1">
                 <span class="help-text">Driver microstepping configuration (e.g., 16, 32).</span>
             </div>
             <div class="form-group">
                 <label for="mmPerRevInput">Millimeters per Revolution:</label>
                 <input type="number" id="mmPerRevInput" value="40" step="1" min="1">
                 <span class="help-text">Linear travel distance per full rotation.</span>
+            </div>
+            <hr class="modal-divider">
+            <div class="form-group">
+                <label for="zStepsPerMMInput">Z-Axis Steps per MM:</label>
+                <input type="number" id="zStepsPerMMInput" value="80" step="1" min="1">
+                <span class="help-text">Steps required for 1mm of Z travel.</span>
+            </div>
+            <div class="form-group">
+                <label for="rotaryStepsPerDegInput">Rotary Steps per Degree:</label>
+                <input type="number" id="rotaryStepsPerDegInput" value="8.88" step="0.01" min="0">
+                <span class="help-text">Steps required for 1 degree of tangential rotation.</span>
             </div>
             <div class="form-group result-group">
                 <label>Calculated Steps per MM:</label>

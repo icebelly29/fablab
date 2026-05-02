@@ -197,6 +197,8 @@ class SvgConverter {
     this.flipY = options.flipY || false;
     this.segmentLength = options.segmentLength || 1.0;
     this.stepsPerMM = options.stepsPerMM || 1.0;
+    this.stepsPerMM_Z = options.stepsPerMM_Z || 80.0;
+    this.stepsPerDeg_A = options.stepsPerDeg_A || 8.88;
     
     // Z-Axis Config (mm initially, then scaled to steps)
     this.zUp = options.zUp !== undefined ? options.zUp : 5;
@@ -232,8 +234,8 @@ class SvgConverter {
   convert(svgContent) {
     const data = [];
     
-    // Header for the Space-Separated format
-    data.push('xyz X Y Z Vx Vy Vz Angle');
+    // First command to enable the motors
+    data.push('enable all 1');
 
     if (typeof DOMParser !== 'undefined') {
         const parser = new DOMParser();
@@ -483,7 +485,17 @@ class SvgConverter {
                     this.emitPoint(data, state, state.machineX, state.machineY, this.zUp, 0, 0, 0);
                 }
                 
-                this.emitPoint(data, state, x, y, this.zUp, 0, 0, 0);
+                // Calculate velocity for the initial travel move
+                const dx = x - state.machineX;
+                const dy = y - state.machineY;
+                const mag = Math.sqrt(dx*dx + dy*dy);
+                let vx = 0, vy = 0;
+                if (mag > 0) {
+                    vx = (dx / mag) * this.feedRate;
+                    vy = (dy / mag) * this.feedRate;
+                }
+                
+                this.emitPoint(data, state, x, y, this.zUp, vx, vy, 0);
                 
                 cur = p;
                 start = p;
@@ -609,18 +621,32 @@ class SvgConverter {
 
       // Helper to emit a point and track relative Z
       const pushLine = (targetX, targetY, targetZ, targetVx, targetVy, targetVz, targetAngle) => {
-          const stepX = Math.round(targetX * this.stepsPerMM);
-          const stepY = Math.round(targetY * this.stepsPerMM);
+          // Calculate relative steps for X, Y, Z, and Angle
+          const relativeXStep = Math.round((targetX - state.machineX) * this.stepsPerMM);
+          const relativeYStep = Math.round((targetY - state.machineY) * this.stepsPerMM);
           
-          // Calculate relative Z: Down goes positive, Up goes negative
-          const relativeZStep = Math.round((state.machineZ - targetZ) * this.stepsPerMM);
+          // Note: The previous logic was (state.machineZ - targetZ), which means "down is positive".
+          // If we want consistency, we should ask if Z should be target - current or current - target.
+          // Based on previous iteration, (state.machineZ - targetZ) * steps was used for Z. Let's keep it.
+          const relativeZStep = Math.round((state.machineZ - targetZ) * this.stepsPerMM_Z);
+          
+          // Angle delta
+          const relativeAStep = Math.round((targetAngle - state.machineA) * this.stepsPerDeg_A);
           
           const stepVx = Math.round(targetVx * this.stepsPerMM);
           const stepVy = Math.round(targetVy * this.stepsPerMM);
-          const stepVz = Math.round(targetVz * this.stepsPerMM);
-          const angle = Math.round(targetAngle);
+          const stepVz = Math.round(targetVz * this.stepsPerMM_Z);
           
-          data.push(`xyz ${stepX} ${stepY} ${relativeZStep} ${stepVx} ${stepVy} ${stepVz} ${angle}`);
+          // If there is no movement at all, don't emit the line (but update state)
+          if (relativeXStep === 0 && relativeYStep === 0 && relativeZStep === 0 && relativeAStep === 0) {
+              state.machineX = targetX;
+              state.machineY = targetY;
+              state.machineZ = targetZ;
+              state.machineA = targetAngle;
+              return;
+          }
+          
+          data.push(`xyz ${relativeXStep} ${relativeYStep} ${relativeZStep} ${stepVx} ${stepVy} ${stepVz} ${relativeAStep}`);
           
           state.machineX = targetX;
           state.machineY = targetY;

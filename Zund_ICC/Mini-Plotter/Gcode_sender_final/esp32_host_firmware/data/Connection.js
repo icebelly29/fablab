@@ -116,11 +116,15 @@ export class MachineConnection {
     handleMessage(msg) {
         if (!msg) return;
 
-        if (msg.toLowerCase() === 'ok' || msg.toLowerCase() === 'ack' || msg.toLowerCase() === 'ready') {
+        if (msg.toLowerCase() === 'ok' || msg.toLowerCase() === 'ack') {
             log(`PICO: ${msg}`, 'success'); // Display the OK in the console
             if (this.callbacks.onAck) this.callbacks.onAck();
+        } else if (msg.toLowerCase() === 'ready') {
+            log(`PICO: ${msg}`, 'success'); 
+            // The pico sends ready when the buffer has cleared after a nope
+            if (this.callbacks.onReady) this.callbacks.onReady();
         } else if (msg.toLowerCase() === 'nope') {
-            log(`PICO: ${msg} (Buffer full, retrying...)`, 'warning');
+            log(`PICO: ${msg} (Buffer full, waiting for ready...)`, 'warning');
             if (this.callbacks.onNope) this.callbacks.onNope();
         } else {
             // Otherwise just log it
