@@ -176,24 +176,22 @@ export async function handleFile(file, onGCodeReady, onSwitchTab) {
                 let segLength = segInput ? parseFloat(segInput.value) : 1.0;
                 if (isNaN(segLength) || segLength < 0.1) segLength = 0.1;
 
-                // Calculate Steps per MM
-                const motorStepsInput = document.getElementById('motorStepsInput');
-                const microstepsInput = document.getElementById('microstepsInput');
-                const mmPerRevInput = document.getElementById('mmPerRevInput');
+                // Calculate per-axis steps using the formula: (motorSteps * microsteps) / distPerRev
+                const axisSteps = (mId, miId, dId, fallback) => {
+                    const m  = parseFloat(document.getElementById(mId)?.value)  || 200;
+                    const mi = parseFloat(document.getElementById(miId)?.value) || 1;
+                    const d  = parseFloat(document.getElementById(dId)?.value)  || 1;
+                    const v  = (m * mi) / d;
+                    return (isNaN(v) || v <= 0) ? fallback : v;
+                };
+
+                const stepsPerMM_X = axisSteps('xMotorSteps','xMicrosteps','xMmPerRev',  160);
+                const stepsPerMM_Y = axisSteps('yMotorSteps','yMicrosteps','yMmPerRev',  160);
+                const stepsPerMM_Z = axisSteps('zMotorSteps','zMicrosteps','zMmPerRev',  800);
+                const stepsPerDeg_A = axisSteps('aMotorSteps','aMicrosteps','aDegPerRev', 8.88);
+
                 const cuttingSpeedInput = document.getElementById('cuttingSpeedInput');
-                const zStepsPerMMInput = document.getElementById('zStepsPerMMInput');
-                const rotaryStepsPerDegInput = document.getElementById('rotaryStepsPerDegInput');
-
-                const motorSteps = motorStepsInput ? parseFloat(motorStepsInput.value) : 200;
-                const microsteps = microstepsInput ? parseFloat(microstepsInput.value) : 32;
-                const mmPerRev = mmPerRevInput ? parseFloat(mmPerRevInput.value) : 40;
                 const cuttingSpeed = cuttingSpeedInput ? parseFloat(cuttingSpeedInput.value) : 30;
-
-                let stepsPerMM = (motorSteps * microsteps) / mmPerRev;
-                if (isNaN(stepsPerMM) || stepsPerMM <= 0) stepsPerMM = 1.0;
-                
-                const stepsPerMM_Z = zStepsPerMMInput ? parseFloat(zStepsPerMMInput.value) : 80;
-                const stepsPerDeg_A = rotaryStepsPerDegInput ? parseFloat(rotaryStepsPerDegInput.value) : 8.88;
 
                 // Run the conversion!
                 const converter = new SvgConverter({
@@ -202,14 +200,15 @@ export async function handleFile(file, onGCodeReady, onSwitchTab) {
                     offsetX: finalOffsetX,
                     offsetY: finalOffsetY,
                     segmentLength: segLength,
-                    stepsPerMM: stepsPerMM,
+                    stepsPerMM_X: stepsPerMM_X,
+                    stepsPerMM_Y: stepsPerMM_Y,
                     stepsPerMM_Z: stepsPerMM_Z,
                     stepsPerDeg_A: stepsPerDeg_A,
                     flipY: true
                 });
                 const gcode = converter.convert(text);
                 
-                onGCodeReady(gcode, stepsPerMM);
+                onGCodeReady(gcode, stepsPerMM_X);
                 log(`Converted (Size: ${finalW.toFixed(1)}x${finalH.toFixed(1)}mm)`, 'success');
                 onSwitchTab('gcode-preview');
             } catch (err) {

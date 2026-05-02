@@ -76,16 +76,10 @@ const dropZone = document.getElementById('dropZone');
 const configModal = document.getElementById('configModal');
 const btnSettings = document.getElementById('btnSettings');
 const btnCloseModal = document.getElementById('btnCloseModal');
-const stepsPerMMLabel = document.getElementById('stepsPerMMLabel');
-const motorStepsInput = document.getElementById('motorStepsInput');
-const microstepsInput = document.getElementById('microstepsInput');
-const mmPerRevInput = document.getElementById('mmPerRevInput');
 const segmentLengthInput = document.getElementById('segmentLengthInput');
 const segmentLengthSlider = document.getElementById('segmentLengthSlider');
 const cuttingSpeedInput = document.getElementById('cuttingSpeedInput');
 const cuttingSpeedSlider = document.getElementById('cuttingSpeedSlider');
-const zStepsPerMMInput = document.getElementById('zStepsPerMMInput');
-const rotaryStepsPerDegInput = document.getElementById('rotaryStepsPerDegInput');
 
 // --- Connection Setup ---
 // Initialize the WebSocket connection. We provide "callbacks" here.
@@ -144,8 +138,14 @@ function startJob() {
             const lastY = parts[2];
             const lastAngle = parts[7];
             
-            // Assume zUp is 5mm, multiply by stepsPerMM
-            const zUpStep = Math.round(5 * state.stepsPerMM);
+            // Calculate Z stepsPerMM from per-axis inputs
+            const zMotorSteps = parseFloat(document.getElementById('zMotorSteps')?.value) || 200;
+            const zMicrosteps = parseFloat(document.getElementById('zMicrosteps')?.value) || 32;
+            const zMmPerRev   = parseFloat(document.getElementById('zMmPerRev')?.value)   || 8;
+            const zStepsPerMM = (zMotorSteps * zMicrosteps) / zMmPerRev || 80;
+
+            // Assume zUp is 5mm, scaled to steps
+            const zUpStep = Math.round(5 * zStepsPerMM);
             
             // Inject a pure vertical lift at the exact last known location
             // Negative Z means "Up" in the relative coordinate system
@@ -328,53 +328,59 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
     handleFile(state.currentFile, onGCodeReady, window.switchTab);
 });
 
-// Handle Dynamic Configuration Changes
+// Helper: compute steps/unit from 3 axis inputs
+function getAxisSteps(motorId, microId, distId, fallback) {
+    const m  = parseFloat(document.getElementById(motorId)?.value) || 200;
+    const mi = parseFloat(document.getElementById(microId)?.value) || 1;
+    const d  = parseFloat(document.getElementById(distId)?.value)  || 1;
+    const v  = (m * mi) / d;
+    return (isNaN(v) || v <= 0) ? fallback : v;
+}
+
+const updateAxisLabels = () => {
+    const axes = [
+        { label: 'xStepsLabel', m: 'xMotorSteps', mi: 'xMicrosteps', d: 'xMmPerRev',  fb: 160,  unit: 'steps/mm' },
+        { label: 'yStepsLabel', m: 'yMotorSteps', mi: 'yMicrosteps', d: 'yMmPerRev',  fb: 160,  unit: 'steps/mm' },
+        { label: 'zStepsLabel', m: 'zMotorSteps', mi: 'zMicrosteps', d: 'zMmPerRev',  fb: 800,  unit: 'steps/mm' },
+        { label: 'aStepsLabel', m: 'aMotorSteps', mi: 'aMicrosteps', d: 'aDegPerRev', fb: 8.88, unit: 'steps/°'  },
+    ];
+    axes.forEach(({ label, m, mi, d, fb, unit }) => {
+        const el = document.getElementById(label);
+        if (el) el.textContent = `= ${getAxisSteps(m, mi, d, fb).toFixed(2)} ${unit}`;
+    });
+};
+
 const retriggerConversion = () => {
-    updateStepsPerMMLabel();
+    updateAxisLabels();
     if (state.currentFile && state.currentFile.name.toLowerCase().endsWith('.svg')) {
         log('Re-calculating trajectory with new settings...', 'info');
         handleFile(state.currentFile, onGCodeReady, window.switchTab);
     }
 };
 
-const updateStepsPerMMLabel = () => {
-    const motorSteps = parseFloat(motorStepsInput.value) || 200;
-    const microsteps = parseFloat(microstepsInput.value) || 16;
-    const mmPerRev = parseFloat(mmPerRevInput.value) || 40;
-    let stepsPerMM = (motorSteps * microsteps) / mmPerRev;
-    if (isNaN(stepsPerMM) || stepsPerMM <= 0) stepsPerMM = 1.0;
-    stepsPerMMLabel.textContent = stepsPerMM.toFixed(2);
-};
+// Slider sync
+segmentLengthSlider.addEventListener('input', (e) => { segmentLengthInput.value = e.target.value; });
+segmentLengthInput.addEventListener('input', (e) => { segmentLengthSlider.value = e.target.value; });
+cuttingSpeedSlider.addEventListener('input', (e) => { cuttingSpeedInput.value = e.target.value; });
+cuttingSpeedInput.addEventListener('input', (e) => { cuttingSpeedSlider.value = e.target.value; });
 
-segmentLengthSlider.addEventListener('input', (e) => {
-    segmentLengthInput.value = e.target.value;
-});
-segmentLengthInput.addEventListener('input', (e) => {
-    segmentLengthSlider.value = e.target.value;
-});
-
-cuttingSpeedSlider.addEventListener('input', (e) => {
-    cuttingSpeedInput.value = e.target.value;
-});
-cuttingSpeedInput.addEventListener('input', (e) => {
-    cuttingSpeedSlider.value = e.target.value;
+// Watch all config inputs for changes
+[
+    segmentLengthSlider, segmentLengthInput, cuttingSpeedSlider, cuttingSpeedInput,
+    'xMotorSteps','xMicrosteps','xMmPerRev',
+    'yMotorSteps','yMicrosteps','yMmPerRev',
+    'zMotorSteps','zMicrosteps','zMmPerRev',
+    'aMotorSteps','aMicrosteps','aDegPerRev',
+].forEach(idOrEl => {
+    const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
+    if (el) {
+        el.addEventListener('change', retriggerConversion);
+        el.addEventListener('input',  updateAxisLabels);
+    }
 });
 
-segmentLengthSlider.addEventListener('change', retriggerConversion);
-segmentLengthInput.addEventListener('change', retriggerConversion);
-cuttingSpeedSlider.addEventListener('change', retriggerConversion);
-cuttingSpeedInput.addEventListener('change', retriggerConversion);
-motorStepsInput.addEventListener('change', retriggerConversion);
-motorStepsInput.addEventListener('input', updateStepsPerMMLabel);
-microstepsInput.addEventListener('change', retriggerConversion);
-microstepsInput.addEventListener('input', updateStepsPerMMLabel);
-mmPerRevInput.addEventListener('change', retriggerConversion);
-mmPerRevInput.addEventListener('input', updateStepsPerMMLabel);
-zStepsPerMMInput.addEventListener('change', retriggerConversion);
-rotaryStepsPerDegInput.addEventListener('change', retriggerConversion);
-
-// Initialize Label
-updateStepsPerMMLabel();
+// Initialize labels on load
+updateAxisLabels();
 
 // Modal Logic
 btnSettings.addEventListener('click', () => {

@@ -112,22 +112,25 @@ export class MachineConnection {
     /**
      * HANDLE MESSAGE
      * Parses incoming strings from the Pico.
+     * Manages protocol state including standard ACKs and Buffer Full signals.
      */
     handleMessage(msg) {
         if (!msg) return;
 
         if (msg.toLowerCase() === 'ok' || msg.toLowerCase() === 'ack') {
-            log(`PICO: ${msg}`, 'success'); // Display the OK in the console
+            log(`PICO: ${msg}`, 'success'); // Standard acknowledgment, ready for next command
             if (this.callbacks.onAck) this.callbacks.onAck();
         } else if (msg.toLowerCase() === 'ready') {
             log(`PICO: ${msg}`, 'success'); 
-            // The pico sends ready when the buffer has cleared after a nope
+            // The pico sends 'ready' when its hardware buffer has cleared after previously
+            // throwing a 'nope'. This triggers the UI to resume feeding the job.
             if (this.callbacks.onReady) this.callbacks.onReady();
         } else if (msg.toLowerCase() === 'nope') {
             log(`PICO: ${msg} (Buffer full, waiting for ready...)`, 'warning');
+            // Buffer is full. The UI should pause sending and wait for the 'ready' signal.
             if (this.callbacks.onNope) this.callbacks.onNope();
         } else {
-            // Otherwise just log it
+            // Otherwise just log it (debug info, coordinates, etc)
             log(`PICO: ${msg}`, 'info');
         }
     }

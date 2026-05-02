@@ -196,7 +196,10 @@ class SvgConverter {
     this.offsetY = options.offsetY || 0;
     this.flipY = options.flipY || false;
     this.segmentLength = options.segmentLength || 1.0;
-    this.stepsPerMM = options.stepsPerMM || 1.0;
+    // Per-axis step rates; stepsPerMM is kept as a fallback for backward compat
+    const globalSteps = options.stepsPerMM || 1.0;
+    this.stepsPerMM_X = options.stepsPerMM_X || globalSteps;
+    this.stepsPerMM_Y = options.stepsPerMM_Y || globalSteps;
     this.stepsPerMM_Z = options.stepsPerMM_Z || 80.0;
     this.stepsPerDeg_A = options.stepsPerDeg_A || 8.88;
     
@@ -482,7 +485,7 @@ class SvgConverter {
                 const { x, y } = this.transform(p);
                 
                 if (state.isPenDown) {
-                    this.emitPoint(data, state, state.machineX, state.machineY, this.zUp, 0, 0, 0);
+                    this.emitPoint(data, state, state.machineX, state.machineY, this.zUp, 0, 0, -this.feedRate);
                 }
                 
                 // Calculate velocity for the initial travel move
@@ -591,7 +594,7 @@ class SvgConverter {
     });
 
     if (state.isPenDown) {
-        this.emitPoint(data, state, state.machineX, state.machineY, this.zUp, 0, 0, 0);
+        this.emitPoint(data, state, state.machineX, state.machineY, this.zUp, 0, 0, -this.feedRate);
         state.isPenDown = false;
     }
 
@@ -622,8 +625,8 @@ class SvgConverter {
       // Helper to emit a point and track relative Z
       const pushLine = (targetX, targetY, targetZ, targetVx, targetVy, targetVz, targetAngle) => {
           // Calculate relative steps for X, Y, Z, and Angle
-          const relativeXStep = Math.round((targetX - state.machineX) * this.stepsPerMM);
-          const relativeYStep = Math.round((targetY - state.machineY) * this.stepsPerMM);
+          const relativeXStep = Math.round((targetX - state.machineX) * this.stepsPerMM_X);
+          const relativeYStep = Math.round((targetY - state.machineY) * this.stepsPerMM_Y);
           
           // Note: The previous logic was (state.machineZ - targetZ), which means "down is positive".
           // If we want consistency, we should ask if Z should be target - current or current - target.
@@ -633,8 +636,8 @@ class SvgConverter {
           // Angle delta
           const relativeAStep = Math.round((targetAngle - state.machineA) * this.stepsPerDeg_A);
           
-          const stepVx = Math.round(targetVx * this.stepsPerMM);
-          const stepVy = Math.round(targetVy * this.stepsPerMM);
+          const stepVx = Math.round(targetVx * this.stepsPerMM_X);
+          const stepVy = Math.round(targetVy * this.stepsPerMM_Y);
           const stepVz = Math.round(targetVz * this.stepsPerMM_Z);
           
           // If there is no movement at all, don't emit the line (but update state)
@@ -656,15 +659,16 @@ class SvgConverter {
 
       // Handle Plunge/Lift & Tangential knife sharp corners
       if (!state.isPenDown && z === this.zDown) {
-          // Orient then plunge
+          // Orient (rotation only, no Z move yet)
           pushLine(state.machineX, state.machineY, this.zUp, 0, 0, 0, targetA);
-          pushLine(state.machineX, state.machineY, this.zDown, 0, 0, 0, targetA);
+          // Plunge: positive Vz = downward
+          pushLine(state.machineX, state.machineY, this.zDown, 0, 0, this.feedRate, targetA);
           state.isPenDown = true;
       } else if (state.isPenDown && Math.abs(diff) > this.angleThreshold && z === this.zDown) {
-          // Sharp corner sequence
-          pushLine(state.machineX, state.machineY, this.zUp, 0, 0, 0, state.machineA);
-          pushLine(state.machineX, state.machineY, this.zUp, 0, 0, 0, targetA);
-          pushLine(state.machineX, state.machineY, this.zDown, 0, 0, 0, targetA);
+          // Sharp corner: lift, rotate, plunge
+          pushLine(state.machineX, state.machineY, this.zUp, 0, 0, -this.feedRate, state.machineA);
+          pushLine(state.machineX, state.machineY, this.zUp, 0, 0,              0, targetA);
+          pushLine(state.machineX, state.machineY, this.zDown, 0, 0,  this.feedRate, targetA);
       }
 
       // Purely Z-up moves should keep current orientation

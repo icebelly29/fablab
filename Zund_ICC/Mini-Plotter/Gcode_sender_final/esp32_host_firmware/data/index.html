@@ -108,35 +108,77 @@
                 <span class="help-text">Target speed for cutting moves (normalized velocity).</span>
             </div>
             <hr class="modal-divider">
-            <div class="form-group">
-                <label for="motorStepsInput">Motor Steps per Revolution:</label>
-                <input type="number" id="motorStepsInput" value="200" step="1" min="1">
-                <span class="help-text">Typically 200 for a 1.8&deg; stepper motor.</span>
+
+            <div class="axis-group">
+                <div class="axis-group-label">X-Axis &nbsp;<span class="axis-calc" id="xStepsLabel"></span></div>
+                <div class="axis-row">
+                    <div class="axis-cell">
+                        <input type="number" id="xMotorSteps" value="200" step="1" min="1">
+                        <span>Steps/Rev</span>
+                    </div>
+                    <div class="axis-cell">
+                        <input type="number" id="xMicrosteps" value="32" step="1" min="1">
+                        <span>Microsteps</span>
+                    </div>
+                    <div class="axis-cell">
+                        <input type="number" id="xMmPerRev" value="40" step="1" min="1">
+                        <span>MM/Rev</span>
+                    </div>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="microstepsInput">Microstepping:</label>
-                <input type="number" id="microstepsInput" value="32" step="1" min="1">
-                <span class="help-text">Driver microstepping configuration (e.g., 16, 32).</span>
+
+            <div class="axis-group">
+                <div class="axis-group-label">Y-Axis &nbsp;<span class="axis-calc" id="yStepsLabel"></span></div>
+                <div class="axis-row">
+                    <div class="axis-cell">
+                        <input type="number" id="yMotorSteps" value="200" step="1" min="1">
+                        <span>Steps/Rev</span>
+                    </div>
+                    <div class="axis-cell">
+                        <input type="number" id="yMicrosteps" value="32" step="1" min="1">
+                        <span>Microsteps</span>
+                    </div>
+                    <div class="axis-cell">
+                        <input type="number" id="yMmPerRev" value="40" step="1" min="1">
+                        <span>MM/Rev</span>
+                    </div>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="mmPerRevInput">Millimeters per Revolution:</label>
-                <input type="number" id="mmPerRevInput" value="40" step="1" min="1">
-                <span class="help-text">Linear travel distance per full rotation.</span>
+
+            <div class="axis-group">
+                <div class="axis-group-label">Z-Axis &nbsp;<span class="axis-calc" id="zStepsLabel"></span></div>
+                <div class="axis-row">
+                    <div class="axis-cell">
+                        <input type="number" id="zMotorSteps" value="200" step="1" min="1">
+                        <span>Steps/Rev</span>
+                    </div>
+                    <div class="axis-cell">
+                        <input type="number" id="zMicrosteps" value="32" step="1" min="1">
+                        <span>Microsteps</span>
+                    </div>
+                    <div class="axis-cell">
+                        <input type="number" id="zMmPerRev" value="8" step="0.1" min="0.01">
+                        <span>MM/Rev</span>
+                    </div>
+                </div>
             </div>
-            <hr class="modal-divider">
-            <div class="form-group">
-                <label for="zStepsPerMMInput">Z-Axis Steps per MM:</label>
-                <input type="number" id="zStepsPerMMInput" value="80" step="1" min="1">
-                <span class="help-text">Steps required for 1mm of Z travel.</span>
-            </div>
-            <div class="form-group">
-                <label for="rotaryStepsPerDegInput">Rotary Steps per Degree:</label>
-                <input type="number" id="rotaryStepsPerDegInput" value="8.88" step="0.01" min="0">
-                <span class="help-text">Steps required for 1 degree of tangential rotation.</span>
-            </div>
-            <div class="form-group result-group">
-                <label>Calculated Steps per MM:</label>
-                <div id="stepsPerMMLabel" class="calc-result">80.00</div>
+
+            <div class="axis-group">
+                <div class="axis-group-label">Rotary (A) &nbsp;<span class="axis-calc" id="aStepsLabel"></span></div>
+                <div class="axis-row">
+                    <div class="axis-cell">
+                        <input type="number" id="aMotorSteps" value="200" step="1" min="1">
+                        <span>Steps/Rev</span>
+                    </div>
+                    <div class="axis-cell">
+                        <input type="number" id="aMicrosteps" value="16" step="1" min="1">
+                        <span>Microsteps</span>
+                    </div>
+                    <div class="axis-cell">
+                        <input type="number" id="aDegPerRev" value="360" step="1" min="1">
+                        <span>Deg/Rev</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

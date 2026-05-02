@@ -86,16 +86,17 @@ export function renderGCode(gcode, canvasId = 'gcodeCanvas', containerId = 'canv
                 parts.shift(); // Remove the "xyz" prefix
             }
 
-            if (parts.length >= 3) {
-                const x = parseFloat(parts[0]) / stepsPerMM;
-                const y = parseFloat(parts[1]) / stepsPerMM;
+            if (parts.length >= 7 && !isNaN(parseFloat(parts[0]))) {
+                // xyz values are RELATIVE deltas in steps
+                const dx = parseFloat(parts[0]) / stepsPerMM;
+                const dy = parseFloat(parts[1]) / stepsPerMM;
                 const zVal = parseFloat(parts[2]); // Relative Z change
                 
                 if (zVal > 0) isPenDown = true;  // Positive Z means moving Down
                 else if (zVal < 0) isPenDown = false; // Negative Z means moving Up
                 
                 const isMove = !isPenDown;
-                const next = { x, y };
+                const next = { x: cur.x + dx, y: cur.y + dy };
                 
                 paths.push({
                     type: isMove ? 'move' : 'cut',
@@ -127,28 +128,32 @@ export function renderGCode(gcode, canvasId = 'gcodeCanvas', containerId = 'canv
         }
     });
 
-    // --- 3. Calculate Scale & Offset ---
-    // We want the machine bed to fit nicely in the window with some padding.
+    // --- 3. Calculate viewport bounds (auto-fit to content + bed) ---
+    // Compute bounding box of all path points, always including the bed rect
+    let minX = 0, maxX = bedW, minY = 0, maxY = bedH;
+    paths.forEach(p => {
+        minX = Math.min(minX, p.from.x, p.to.x);
+        maxX = Math.max(maxX, p.from.x, p.to.x);
+        minY = Math.min(minY, p.from.y, p.to.y);
+        maxY = Math.max(maxY, p.from.y, p.to.y);
+    });
+
     const padding = 40; // px
     const availableW = canvas.width - padding * 2;
     const availableH = canvas.height - padding * 2;
-    
-    // Calculate how much we need to shrink/grow 1mm to equal 1 pixel.
-    const scaleX = availableW / bedW;
-    const scaleY = availableH / bedH;
-    const scale = Math.min(scaleX, scaleY); // Use smallest scale to fit both dimensions
+    const dataW = maxX - minX || bedW;
+    const dataH = maxY - minY || bedH;
+    const scale = Math.min(availableW / dataW, availableH / dataH);
 
-    // Calculate margins to center the bed in the window
-    const offsetX = (canvas.width - bedW * scale) / 2;
-    const offsetY = (canvas.height - bedH * scale) / 2;
+    // Center the bounding box in the canvas
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const offsetX = canvas.width  / 2 - centerX * scale;
+    const offsetY = canvas.height / 2 + centerY * scale;
 
     // --- 4. Coordinate Mapper Functions ---
-    // Converts Machine X (mm) to Canvas X (px)
     const mapX = (x) => x * scale + offsetX;
-    
-    // Converts Machine Y (mm) to Canvas Y (px)
-    // Note the subtraction! Canvas Y=0 is top, Machine Y=0 is bottom.
-    const mapY = (y) => canvas.height - (y * scale + offsetY); 
+    const mapY = (y) => offsetY - y * scale; // flip Y (machine Y-up → canvas Y-down)
 
     // --- 5. Draw! ---
     ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear screen
