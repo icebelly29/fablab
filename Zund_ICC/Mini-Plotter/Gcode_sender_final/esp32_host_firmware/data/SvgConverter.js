@@ -636,9 +636,9 @@ class SvgConverter {
           // Angle delta
           const relativeAStep = Math.round((targetAngle - state.machineA) * this.stepsPerDeg_A);
           
-          const stepVx = Math.round(targetVx * this.stepsPerMM_X);
-          const stepVy = Math.round(targetVy * this.stepsPerMM_Y);
-          const stepVz = Math.round(targetVz * this.stepsPerMM_Z);
+          const stepVx = Math.abs(Math.round(targetVx * this.stepsPerMM_X));
+          const stepVy = Math.abs(Math.round(targetVy * this.stepsPerMM_Y));
+          const stepVz = Math.abs(Math.round(targetVz * this.stepsPerMM_Z));
           
           // If there is no movement at all, don't emit the line (but update state)
           if (relativeXStep === 0 && relativeYStep === 0 && relativeZStep === 0 && relativeAStep === 0) {

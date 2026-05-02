@@ -292,6 +292,17 @@ document.getElementById('btnConnect').addEventListener('click', () => {
     }
 });
 
+// Go to Zero: send a homing command
+document.getElementById('btnGoToZero').addEventListener('click', () => {
+    if (state.isSending) {
+        log('Cannot go to zero while a job is running.', 'error');
+        return;
+    }
+    const cmd = 'home';
+    connection.send(cmd, true);
+    log(`Sent: ${cmd}`, 'info');
+});
+
 // 4. Sync Editor changes
 // When user types in the editor, update our global variable so the preview knows.
 editor.addEventListener('input', () => {
