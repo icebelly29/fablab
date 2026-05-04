@@ -405,3 +405,189 @@ main {
     main { flex-direction: column; }
     .console-panel { flex: 0 0 250px; }
 }
+
+/* ============================================================
+   JOG CONTROL PANEL
+   ============================================================ */
+
+.jog-panel {
+    width: 480px;
+}
+
+.jog-section-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #60a5fa;
+    margin-bottom: 0.5rem;
+}
+
+/* Step-size selector row */
+.jog-step-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.jog-step-btns {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.jog-step-btn {
+    flex: 1;
+    padding: 0.4rem 0;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.375rem;
+    color: #94a3b8;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.jog-step-btn:hover { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border-color: #3b82f6; }
+.jog-step-btn.active { background: #3b82f6; color: white; border-color: #3b82f6; font-weight: 700; }
+
+/* XY + Z side-by-side layout */
+.jog-controls-row {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+/* D-Pad (3x3 grid) */
+.jog-dpad-section { display: flex; flex-direction: column; align-items: center; }
+
+.jog-dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 70px);
+    grid-template-rows: repeat(3, 70px);
+    gap: 6px;
+}
+
+.jog-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.5rem;
+    color: #e2e8f0;
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition: all 0.1s;
+    user-select: none;
+    line-height: 1;
+}
+.jog-btn span {
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: #64748b;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+.jog-btn:hover {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: #3b82f6;
+    color: #93c5fd;
+    transform: scale(1.06);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+}
+.jog-btn:active {
+    transform: scale(0.95);
+    background: rgba(59, 130, 246, 0.45);
+}
+
+/* Home button in the center */
+.jog-home-btn {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: #34d399;
+    font-size: 1.6rem;
+}
+.jog-home-btn:hover {
+    background: rgba(16, 185, 129, 0.3);
+    border-color: #10b981;
+    color: #6ee7b7;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+}
+
+/* Z-axis column */
+.jog-z-section { display: flex; flex-direction: column; align-items: center; }
+
+.jog-z-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.jog-z-btn {
+    width: 70px;
+    height: 70px;
+}
+
+.jog-z-label {
+    width: 70px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: #475569;
+    text-transform: uppercase;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 0.375rem;
+    background: rgba(15,23,42,0.4);
+}
+
+/* Position bar */
+.jog-position-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 0.5rem;
+    padding: 0.6rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+.jog-pos-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #475569;
+    margin-right: auto;
+}
+
+.jog-pos-item {
+    color: #94a3b8;
+    white-space: nowrap;
+}
+.jog-pos-item span {
+    color: #4ade80;
+    font-weight: 700;
+}
+
+.jog-reset-pos-btn {
+    margin-left: auto;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.72rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 0.3rem;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.jog-reset-pos-btn:hover { color: #ef4444; border-color: #ef4444; background: rgba(239,68,68,0.1); }

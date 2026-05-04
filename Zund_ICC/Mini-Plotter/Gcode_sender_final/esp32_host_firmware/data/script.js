@@ -437,3 +437,129 @@ dropZone.addEventListener('drop', (e) => {
 
 // Connection requires a user gesture for WebSerial, so we don't auto-connect
 // on page load anymore.
+
+// ============================================================================
+//  JOG CONTROL
+// ============================================================================
+
+/**
+ * JOG STATE
+ * We track a local "displayed" position so the user can see accumulated deltas.
+ * This is NOT the machine's actual encoder position — it's a dead-reckoning counter.
+ */
+const jogState = {
+    step: 0.1,        // Current step size in mm
+    posX: 0,
+    posY: 0,
+    posZ: 0,
+};
+
+const jogModal = document.getElementById('jogModal');
+const btnJog   = document.getElementById('btnJog');
+
+/** Open / close helpers (same fade pattern as config modal) */
+function openJogModal() {
+    jogModal.classList.remove('hidden');
+    setTimeout(() => jogModal.classList.add('visible'), 10);
+    // Bind keyboard jogging while modal is open
+    window.addEventListener('keydown', handleJogKey);
+}
+
+function closeJogModal() {
+    jogModal.classList.remove('visible');
+    setTimeout(() => jogModal.classList.add('hidden'), 300);
+    window.removeEventListener('keydown', handleJogKey);
+}
+
+btnJog.addEventListener('click', openJogModal);
+document.getElementById('btnCloseJog').addEventListener('click', closeJogModal);
+jogModal.addEventListener('click', (e) => { if (e.target === jogModal) closeJogModal(); });
+
+/** Step-size pill buttons */
+document.querySelectorAll('.jog-step-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.jog-step-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        jogState.step = parseFloat(btn.dataset.step);
+    });
+});
+
+/**
+ * SEND JOG
+ * Builds and sends a `jog <dx_mm> <dy_mm> <dz_mm>` command.
+ * The Pico firmware is expected to interpret this as a relative move in mm.
+ *
+ * @param {number} dx - X delta in mm (positive = right)
+ * @param {number} dy - Y delta in mm (positive = forward)
+ * @param {number} dz - Z delta in mm (positive = up)
+ */
+function sendJog(dx, dy, dz) {
+    if (!connection.connected) {
+        log('Jog: Not connected to machine.', 'error');
+        return;
+    }
+
+    // Build command string: "jog <dx> <dy> <dz>"
+    const cmd = `jog ${dx} ${dy} ${dz}`;
+    connection.send(cmd, true);
+
+    // Update local dead-reckoning position display
+    jogState.posX += dx;
+    jogState.posY += dy;
+    jogState.posZ += dz;
+    document.getElementById('jogPosX').textContent = jogState.posX.toFixed(2);
+    document.getElementById('jogPosY').textContent = jogState.posY.toFixed(2);
+    document.getElementById('jogPosZ').textContent = jogState.posZ.toFixed(2);
+}
+
+// D-pad and Z buttons
+document.getElementById('jogXPlus') .addEventListener('click', () => sendJog( jogState.step, 0, 0));
+document.getElementById('jogXMinus').addEventListener('click', () => sendJog(-jogState.step, 0, 0));
+document.getElementById('jogYPlus') .addEventListener('click', () => sendJog(0,  jogState.step, 0));
+document.getElementById('jogYMinus').addEventListener('click', () => sendJog(0, -jogState.step, 0));
+document.getElementById('jogZPlus') .addEventListener('click', () => sendJog(0, 0,  jogState.step));
+document.getElementById('jogZMinus').addEventListener('click', () => sendJog(0, 0, -jogState.step));
+
+// Home button — sends the same 'home' command as "Go to Zero"
+document.getElementById('jogHome').addEventListener('click', () => {
+    if (!connection.connected) { log('Jog: Not connected.', 'error'); return; }
+    connection.send('home', true);
+    // Reset dead-reckoning position to zero after homing
+    jogState.posX = 0; jogState.posY = 0; jogState.posZ = 0;
+    document.getElementById('jogPosX').textContent = '0.00';
+    document.getElementById('jogPosY').textContent = '0.00';
+    document.getElementById('jogPosZ').textContent = '0.00';
+});
+
+// Reset position display
+document.getElementById('jogResetPos').addEventListener('click', () => {
+    jogState.posX = 0; jogState.posY = 0; jogState.posZ = 0;
+    document.getElementById('jogPosX').textContent = '0.00';
+    document.getElementById('jogPosY').textContent = '0.00';
+    document.getElementById('jogPosZ').textContent = '0.00';
+});
+
+/**
+ * KEYBOARD JOG HANDLER
+ * Arrow keys → X/Y, PageUp/PageDown → Z, Home → zero.
+ * Only active when the jog modal is open.
+ */
+function handleJogKey(e) {
+    // Don't steal keys from text inputs
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    const keyMap = {
+        'ArrowRight': () => sendJog( jogState.step, 0, 0),
+        'ArrowLeft':  () => sendJog(-jogState.step, 0, 0),
+        'ArrowUp':    () => sendJog(0,  jogState.step, 0),
+        'ArrowDown':  () => sendJog(0, -jogState.step, 0),
+        'PageUp':     () => sendJog(0, 0,  jogState.step),
+        'PageDown':   () => sendJog(0, 0, -jogState.step),
+        'Home':       () => document.getElementById('jogHome').click(),
+    };
+
+    if (keyMap[e.key]) {
+        e.preventDefault();
+        keyMap[e.key]();
+    }
+}

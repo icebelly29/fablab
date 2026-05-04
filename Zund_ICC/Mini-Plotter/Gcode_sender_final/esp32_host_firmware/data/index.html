@@ -47,6 +47,7 @@
             </div>
             <div class="actions" style="display: flex; gap: 0.5rem; align-items: center;">
                 <button class="btn btn-action" id="btnSettings" title="Machine Configuration">⚙️ Settings</button>
+                <button class="btn btn-action" id="btnJog" title="Jog Machine">🕹️ Jog</button>
                 <button class="btn btn-action" id="btnGoToZero" title="Send machine to home/zero position">⌂ Go to Zero</button>
 
                 <input type="file" id="fileInput" accept=".txt,.csv,.gcode,.svg" style="display: none;">
@@ -83,6 +84,68 @@
         </div>
     </section>
 </main>
+
+<!-- Jog Control Modal -->
+<div id="jogModal" class="modal-overlay hidden">
+    <div class="modal-content glass-panel jog-panel">
+        <div class="modal-header">
+            <h2>🕹️ Jog Control</h2>
+            <button id="btnCloseJog" class="btn-icon">&times;</button>
+        </div>
+        <div class="modal-body">
+            <!-- Step Size -->
+            <div class="jog-step-row">
+                <span class="jog-section-label">Step Size</span>
+                <div class="jog-step-btns">
+                    <button class="jog-step-btn active" data-step="0.1">0.1 mm</button>
+                    <button class="jog-step-btn" data-step="1">1 mm</button>
+                    <button class="jog-step-btn" data-step="5">5 mm</button>
+                    <button class="jog-step-btn" data-step="10">10 mm</button>
+                </div>
+            </div>
+
+            <!-- XY D-Pad + Z controls side by side -->
+            <div class="jog-controls-row">
+                <!-- D-Pad -->
+                <div class="jog-dpad-section">
+                    <span class="jog-section-label">X / Y Axis</span>
+                    <div class="jog-dpad">
+                        <div></div>
+                        <button class="jog-btn" id="jogYPlus"  title="Y+">▲<span>Y+</span></button>
+                        <div></div>
+                        <button class="jog-btn" id="jogXMinus" title="X-">◀<span>X−</span></button>
+                        <button class="jog-btn jog-home-btn" id="jogHome" title="Go to Zero">⌂</button>
+                        <button class="jog-btn" id="jogXPlus"  title="X+">▶<span>X+</span></button>
+                        <div></div>
+                        <button class="jog-btn" id="jogYMinus" title="Y-">▼<span>Y−</span></button>
+                        <div></div>
+                    </div>
+                </div>
+
+                <!-- Z Axis -->
+                <div class="jog-z-section">
+                    <span class="jog-section-label">Z Axis</span>
+                    <div class="jog-z-col">
+                        <button class="jog-btn jog-z-btn" id="jogZPlus"  title="Z Up">▲<span>Z+</span></button>
+                        <div class="jog-z-label">Z</div>
+                        <button class="jog-btn jog-z-btn" id="jogZMinus" title="Z Down">▼<span>Z−</span></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Position Display -->
+            <div class="jog-position-bar">
+                <span class="jog-pos-label">Position</span>
+                <span class="jog-pos-item">X: <span id="jogPosX">0.00</span></span>
+                <span class="jog-pos-item">Y: <span id="jogPosY">0.00</span></span>
+                <span class="jog-pos-item">Z: <span id="jogPosZ">0.00</span></span>
+                <button class="jog-reset-pos-btn" id="jogResetPos" title="Reset displayed position to zero">Reset</button>
+            </div>
+
+            <p class="help-text" style="text-align:center;">Keyboard: Arrow keys → X/Y &nbsp;|&nbsp; PgUp/PgDn → Z &nbsp;|&nbsp; Home → Go to Zero</p>
+        </div>
+    </div>
+</div>
 
 <!-- Configuration Modal -->
 <div id="configModal" class="modal-overlay hidden">
