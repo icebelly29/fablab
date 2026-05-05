@@ -48,8 +48,6 @@
             <div class="actions" style="display: flex; gap: 0.5rem; align-items: center;">
                 <button class="btn btn-action" id="btnSettings" title="Machine Configuration">⚙️ Settings</button>
                 <button class="btn btn-action" id="btnJog" title="Jog Machine">🕹️ Jog</button>
-                <button class="btn btn-action" id="btnGoToZero" title="Send machine to home/zero position">⌂ Go to Zero</button>
-
                 <input type="file" id="fileInput" accept=".txt,.csv,.gcode,.svg" style="display: none;">
                 <button class="btn btn-action" id="btnConnect">Connect Serial</button>
                 <button class="btn btn-action" onclick="document.getElementById('fileInput').click()">Load File</button>
@@ -131,6 +129,16 @@
                         <button class="jog-btn jog-z-btn" id="jogZMinus" title="Z Down">▼<span>Z−</span></button>
                     </div>
                 </div>
+
+                <!-- Rotary Axis -->
+                <div class="jog-a-section">
+                    <span class="jog-section-label">Rotary (A)</span>
+                    <div class="jog-a-col">
+                        <button class="jog-btn jog-a-btn" id="jogAPlus"  title="Rotate CW">↻<span>A+</span></button>
+                        <div class="jog-a-label">A</div>
+                        <button class="jog-btn jog-a-btn" id="jogAMinus" title="Rotate CCW">↺<span>A−</span></button>
+                    </div>
+                </div>
             </div>
 
             <!-- Position Display -->
@@ -139,10 +147,11 @@
                 <span class="jog-pos-item">X: <span id="jogPosX">0.00</span></span>
                 <span class="jog-pos-item">Y: <span id="jogPosY">0.00</span></span>
                 <span class="jog-pos-item">Z: <span id="jogPosZ">0.00</span></span>
+                <span class="jog-pos-item">A: <span id="jogPosA">0.00</span></span>
                 <button class="jog-reset-pos-btn" id="jogResetPos" title="Reset displayed position to zero">Reset</button>
             </div>
 
-            <p class="help-text" style="text-align:center;">Keyboard: Arrow keys → X/Y &nbsp;|&nbsp; PgUp/PgDn → Z &nbsp;|&nbsp; Home → Go to Zero</p>
+            <p class="help-text" style="text-align:center;">Keyboard: Arrow keys → X/Y &nbsp;|&nbsp; PgUp/PgDn → Z &nbsp;|&nbsp; [ / ] → Rotary &nbsp;|&nbsp; Home → Go to Zero</p>
         </div>
     </div>
 </div>

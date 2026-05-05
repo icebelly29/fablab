@@ -411,7 +411,7 @@ main {
    ============================================================ */
 
 .jog-panel {
-    width: 480px;
+    width: 540px;
 }
 
 .jog-section-label {
@@ -451,10 +451,10 @@ main {
 .jog-step-btn:hover { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border-color: #3b82f6; }
 .jog-step-btn.active { background: #3b82f6; color: white; border-color: #3b82f6; font-weight: 700; }
 
-/* XY + Z side-by-side layout */
+/* XY + Z + A side-by-side layout */
 .jog-controls-row {
     display: flex;
-    gap: 2rem;
+    gap: 1.5rem;
     align-items: flex-start;
     justify-content: center;
 }
@@ -518,22 +518,22 @@ main {
     box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
 }
 
-/* Z-axis column */
-.jog-z-section { display: flex; flex-direction: column; align-items: center; }
+/* Z and A axis columns */
+.jog-z-section, .jog-a-section { display: flex; flex-direction: column; align-items: center; }
 
-.jog-z-col {
+.jog-z-col, .jog-a-col {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 6px;
 }
 
-.jog-z-btn {
+.jog-z-btn, .jog-a-btn {
     width: 70px;
     height: 70px;
 }
 
-.jog-z-label {
+.jog-z-label, .jog-a-label {
     width: 70px;
     height: 40px;
     display: flex;

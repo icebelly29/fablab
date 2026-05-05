@@ -53,6 +53,16 @@ You need to start a simple local web server in this folder.
    - **Trajectory Preview Tab:** See exactly what the machine will draw. The visualizer parses the relative Z outputs to draw blue paths for Pen-Down moves and grey dashed paths for Pen-Up travels.
    - Once ready, click **Start**. The app streams the file line-by-line, perfectly coordinating with the Pico's `ok` and `nope` signals!
 
+5. **Manual Control (🕹️ Jog):**
+   - Click the **Jog** button to open the manual control overlay.
+   - Use the D-Pad for **X/Y** movement.
+   - Use the vertical buttons for **Z-Axis** (Up/Down) and **Rotary Axis** (CW/CCW).
+   - **Keyboard Shortcuts:**
+     - `Arrow Keys`: Move X and Y.
+     - `Page Up / Page Down`: Move Z axis.
+     - `[ / ]` (Brackets): Rotate A axis.
+     - `Home`: Command the machine to go to zero (`home`).
+
 ---
 
 ## The Output Format
@@ -70,3 +80,13 @@ The very first line sent is always `enable all 1` to engage the stepper drivers.
 - **Angle**: The *Relative* change in Tangential Knife angle (in Steps, calculated from Steps per Degree).
 
 *(Example: `xyz 1024 1024 6400 1200 400 0 45`)*
+
+---
+
+## Commands Reference
+
+| Command | Description | Format |
+| :--- | :--- | :--- |
+| **xyz** | Trajectory segment / Manual Jog | `xyz <dx> <dy> <dz> <vx> <vy> <vz> <da>` |
+| **home** | Move all axes to zero | `home` |
+| **enable** | Enable/Disable motors | `enable all <0/1>` |

@@ -292,17 +292,6 @@ document.getElementById('btnConnect').addEventListener('click', () => {
     }
 });
 
-// Go to Zero: send a homing command
-document.getElementById('btnGoToZero').addEventListener('click', () => {
-    if (state.isSending) {
-        log('Cannot go to zero while a job is running.', 'error');
-        return;
-    }
-    const cmd = 'home';
-    connection.send(cmd, true);
-    log(`Sent: ${cmd}`, 'info');
-});
-
 // 4. Sync Editor changes
 // When user types in the editor, update our global variable so the preview knows.
 editor.addEventListener('input', () => {
@@ -452,6 +441,7 @@ const jogState = {
     posX: 0,
     posY: 0,
     posZ: 0,
+    posA: 0,
 };
 
 const jogModal = document.getElementById('jogModal');
@@ -486,57 +476,83 @@ document.querySelectorAll('.jog-step-btn').forEach(btn => {
 
 /**
  * SEND JOG
- * Builds and sends a `jog <dx_mm> <dy_mm> <dz_mm>` command.
- * The Pico firmware is expected to interpret this as a relative move in mm.
+ * Builds and sends a `jog <dx_mm> <dy_mm> <dz_mm> <da_deg>` command.
+ * The Pico firmware is expected to interpret this as a relative move.
  *
- * @param {number} dx - X delta in mm (positive = right)
- * @param {number} dy - Y delta in mm (positive = forward)
- * @param {number} dz - Z delta in mm (positive = up)
+ * @param {number} dx - X delta in mm
+ * @param {number} dy - Y delta in mm
+ * @param {number} dz - Z delta in mm
+ * @param {number} da - A delta in degrees
  */
-function sendJog(dx, dy, dz) {
+function sendJog(dx, dy, dz, da = 0) {
     if (!connection.connected) {
         log('Jog: Not connected to machine.', 'error');
         return;
     }
 
-    // Build command string: "jog <dx> <dy> <dz>"
-    const cmd = `jog ${dx} ${dy} ${dz}`;
+    // 1. Get current scaling factors from UI
+    const xStepsPerMM = getAxisSteps('xMotorSteps', 'xMicrosteps', 'xMmPerRev', 160);
+    const yStepsPerMM = getAxisSteps('yMotorSteps', 'yMicrosteps', 'yMmPerRev', 160);
+    const zStepsPerMM = getAxisSteps('zMotorSteps', 'zMicrosteps', 'zMmPerRev', 800);
+    const aStepsPerDeg = getAxisSteps('aMotorSteps', 'aMicrosteps', 'aDegPerRev', 8.88);
+    const feedRate     = parseFloat(document.getElementById('cuttingSpeedInput')?.value) || 30;
+
+    // 2. Calculate relative steps
+    // Note: Z-axis convention is positive for DOWN, so we negate dz (Up is positive)
+    const relX = Math.round(dx * xStepsPerMM);
+    const relY = Math.round(dy * yStepsPerMM);
+    const relZ = Math.round(-dz * zStepsPerMM);
+    const relA = Math.round(da * aStepsPerDeg);
+
+    // 3. Calculate velocities in steps/sec (absolute)
+    const vx = dx !== 0 ? Math.abs(Math.round(feedRate * xStepsPerMM)) : 0;
+    const vy = dy !== 0 ? Math.abs(Math.round(feedRate * yStepsPerMM)) : 0;
+    const vz = dz !== 0 ? Math.abs(Math.round(feedRate * zStepsPerMM)) : 0;
+
+    // 4. Build command string: "xyz <dx> <dy> <dz> <vx> <vy> <vz> <da>"
+    const cmd = `xyz ${relX} ${relY} ${relZ} ${vx} ${vy} ${vz} ${relA}`;
     connection.send(cmd, true);
 
-    // Update local dead-reckoning position display
+    // Update local dead-reckoning position display (in mm/deg)
     jogState.posX += dx;
     jogState.posY += dy;
     jogState.posZ += dz;
+    jogState.posA += da;
     document.getElementById('jogPosX').textContent = jogState.posX.toFixed(2);
     document.getElementById('jogPosY').textContent = jogState.posY.toFixed(2);
     document.getElementById('jogPosZ').textContent = jogState.posZ.toFixed(2);
+    document.getElementById('jogPosA').textContent = jogState.posA.toFixed(2);
 }
 
 // D-pad and Z buttons
-document.getElementById('jogXPlus') .addEventListener('click', () => sendJog( jogState.step, 0, 0));
-document.getElementById('jogXMinus').addEventListener('click', () => sendJog(-jogState.step, 0, 0));
-document.getElementById('jogYPlus') .addEventListener('click', () => sendJog(0,  jogState.step, 0));
-document.getElementById('jogYMinus').addEventListener('click', () => sendJog(0, -jogState.step, 0));
-document.getElementById('jogZPlus') .addEventListener('click', () => sendJog(0, 0,  jogState.step));
-document.getElementById('jogZMinus').addEventListener('click', () => sendJog(0, 0, -jogState.step));
+document.getElementById('jogXPlus') .addEventListener('click', () => sendJog( jogState.step, 0, 0, 0));
+document.getElementById('jogXMinus').addEventListener('click', () => sendJog(-jogState.step, 0, 0, 0));
+document.getElementById('jogYPlus') .addEventListener('click', () => sendJog(0,  jogState.step, 0, 0));
+document.getElementById('jogYMinus').addEventListener('click', () => sendJog(0, -jogState.step, 0, 0));
+document.getElementById('jogZPlus') .addEventListener('click', () => sendJog(0, 0,  jogState.step, 0));
+document.getElementById('jogZMinus').addEventListener('click', () => sendJog(0, 0, -jogState.step, 0));
+document.getElementById('jogAPlus') .addEventListener('click', () => sendJog(0, 0, 0,  jogState.step));
+document.getElementById('jogAMinus').addEventListener('click', () => sendJog(0, 0, 0, -jogState.step));
 
 // Home button — sends the same 'home' command as "Go to Zero"
 document.getElementById('jogHome').addEventListener('click', () => {
     if (!connection.connected) { log('Jog: Not connected.', 'error'); return; }
     connection.send('home', true);
     // Reset dead-reckoning position to zero after homing
-    jogState.posX = 0; jogState.posY = 0; jogState.posZ = 0;
+    jogState.posX = 0; jogState.posY = 0; jogState.posZ = 0; jogState.posA = 0;
     document.getElementById('jogPosX').textContent = '0.00';
     document.getElementById('jogPosY').textContent = '0.00';
     document.getElementById('jogPosZ').textContent = '0.00';
+    document.getElementById('jogPosA').textContent = '0.00';
 });
 
 // Reset position display
 document.getElementById('jogResetPos').addEventListener('click', () => {
-    jogState.posX = 0; jogState.posY = 0; jogState.posZ = 0;
+    jogState.posX = 0; jogState.posY = 0; jogState.posZ = 0; jogState.posA = 0;
     document.getElementById('jogPosX').textContent = '0.00';
     document.getElementById('jogPosY').textContent = '0.00';
     document.getElementById('jogPosZ').textContent = '0.00';
+    document.getElementById('jogPosA').textContent = '0.00';
 });
 
 /**
@@ -553,8 +569,10 @@ function handleJogKey(e) {
         'ArrowLeft':  () => sendJog(-jogState.step, 0, 0),
         'ArrowUp':    () => sendJog(0,  jogState.step, 0),
         'ArrowDown':  () => sendJog(0, -jogState.step, 0),
-        'PageUp':     () => sendJog(0, 0,  jogState.step),
-        'PageDown':   () => sendJog(0, 0, -jogState.step),
+        'PageUp':     () => sendJog(0, 0,  jogState.step, 0),
+        'PageDown':   () => sendJog(0, 0, -jogState.step, 0),
+        '[':          () => sendJog(0, 0, 0, -jogState.step),
+        ']':          () => sendJog(0, 0, 0,  jogState.step),
         'Home':       () => document.getElementById('jogHome').click(),
     };
 
