@@ -487,23 +487,13 @@ class SvgConverter {
         switch (type) {
             case 'M': {
                 const p = getPt(0);
-                const { x, y } = this.transform(p);
                 
                 if (state.isPenDown) {
                     this.emitPoint(data, state, state.machineX, state.machineY, this.zUp, 0, 0, -this.feedRate);
                 }
                 
-                // Calculate velocity for the initial travel move
-                const dx = x - state.machineX;
-                const dy = y - state.machineY;
-                const mag = Math.sqrt(dx*dx + dy*dy);
-                let vx = 0, vy = 0;
-                if (mag > 0) {
-                    vx = (dx / mag) * this.feedRate;
-                    vy = (dy / mag) * this.feedRate;
-                }
-                
-                this.emitPoint(data, state, x, y, this.zUp, vx, vy, 0);
+                // Segment the travel move to avoid large step values (>32000) over long distances
+                this.emitLineSubdivided(data, state, p, this.zUp);
                 
                 cur = p;
                 start = p;
@@ -727,9 +717,10 @@ class SvgConverter {
    * @method emitLineSubdivided
    * @description Helper to draw a straight line subdivided into exactly segmentLength intervals.
    */
-  emitLineSubdivided(data, state, rawP) {
+  emitLineSubdivided(data, state, rawP, targetZ) {
       const startX = state.machineX;
       const startY = state.machineY;
+      const zHeight = targetZ !== undefined ? targetZ : this.zDown;
       
       const p = this.transform(rawP);
       
@@ -737,7 +728,12 @@ class SvgConverter {
       const dy = p.y - startY;
       const dist = Math.sqrt(dx*dx + dy*dy);
       
-      if (dist < 0.000001) return;
+      if (dist < 0.000001) {
+          if (Math.abs(zHeight - state.machineZ) > 0.001) {
+              this.emitPoint(data, state, p.x, p.y, zHeight, 0, 0, 0);
+          }
+          return;
+      }
 
       const numSegments = Math.ceil(dist / this.segmentLength);
       
@@ -759,7 +755,7 @@ class SvgConverter {
           const currX = startX + dx * t;
           const currY = startY + dy * t;
           
-          this.emitPoint(data, state, currX, currY, this.zDown, vx, vy, vz);
+          this.emitPoint(data, state, currX, currY, zHeight, vx, vy, vz);
       }
   }
 
