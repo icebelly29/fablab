@@ -26,6 +26,14 @@
             <span>G-Code Command</span>
             <button id="btnClear" class="btn btn-action" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Clear</button>
         </div>
+        <div class="quick-actions" style="display: flex; gap: 0.5rem; padding: 0.5rem; background: var(--bg-tertiary); border-bottom: 1px solid var(--border-color); align-items: center; flex-wrap: wrap;">
+            <button id="btnToggleMotors" class="btn btn-action" style="font-size: 0.75rem;" data-enabled="false">Enable Motors</button>
+            <button id="btnPingAll" class="btn btn-action" style="font-size: 0.75rem;">Ping All</button>
+            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                <input type="number" id="pingNodeId" placeholder="ID" style="width: 50px; padding: 0.2rem; font-size: 0.75rem; border: 1px solid var(--border); border-radius: 4px; background: rgba(15, 23, 42, 0.5); color: white; outline: none;">
+                <button id="btnPingNode" class="btn btn-action" style="font-size: 0.75rem;">Ping</button>
+            </div>
+        </div>
         <div class="console-output" id="consoleOutput">
             <div class="console-line log-info">System initialized...</div>
             <div class="console-line log-info">Click 'Connect Serial' to connect to Pico.</div>
@@ -179,6 +187,24 @@
                     <input type="number" id="cuttingSpeedInput" value="30" step="1" min="1" max="200">
                 </div>
                 <span class="help-text">Target speed for cutting moves (normalized velocity).</span>
+            </div>
+            
+            <div class="form-group">
+                <label for="maxStepsInput">Max Steps (Per Command):</label>
+                <div class="slider-input-group">
+                    <input type="range" id="maxStepsSlider" value="30000" step="1000" min="1000" max="65535">
+                    <input type="number" id="maxStepsInput" value="30000" step="1" min="1000" max="65535">
+                </div>
+                <span class="help-text">Limit relative steps in a single move. Moves exceeding this will be divided.</span>
+            </div>
+
+            <div class="form-group">
+                <label for="maxSpeedInput">Max Speed (SPS):</label>
+                <div class="slider-input-group">
+                    <input type="range" id="maxSpeedSlider" value="30000" step="1000" min="1000" max="65535">
+                    <input type="number" id="maxSpeedInput" value="30000" step="1" min="1000" max="65535">
+                </div>
+                <span class="help-text">Limit Steps-Per-Second. Feedrates are scaled down to ensure synchronization if exceeded.</span>
             </div>
             <hr class="modal-divider">
 

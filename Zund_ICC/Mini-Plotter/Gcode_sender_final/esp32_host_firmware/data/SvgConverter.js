@@ -215,6 +215,10 @@ class SvgConverter {
     // Tangential Knife Config
     this.angleThreshold = options.angleThreshold !== undefined ? options.angleThreshold : 10;
     this.decimals = 4;
+    
+    // Limits
+    this.maxSteps = options.maxSteps !== undefined ? options.maxSteps : 30000;
+    this.maxSpeed = options.maxSpeed !== undefined ? options.maxSpeed : 30000;
   }
 
   /**
@@ -631,6 +635,36 @@ class SvgConverter {
           // Angle delta
           const relativeAStep = Math.round((targetAngle - state.machineA) * this.stepsPerDeg_A);
           
+          const maxAbsStep = Math.max(
+              Math.abs(relativeXStep),
+              Math.abs(relativeYStep),
+              Math.abs(relativeZStep),
+              Math.abs(relativeAStep)
+          );
+
+          // Subdivide moves recursively if they exceed firmware limits
+          if (maxAbsStep > this.maxSteps) {
+              const segments = Math.ceil(maxAbsStep / this.maxSteps);
+              const stepX = (targetX - state.machineX) / segments;
+              const stepY = (targetY - state.machineY) / segments;
+              const stepZ = (targetZ - state.machineZ) / segments;
+              const stepA = (targetAngle - state.machineA) / segments;
+              
+              let currX = state.machineX;
+              let currY = state.machineY;
+              let currZ = state.machineZ;
+              let currA = state.machineA;
+              
+              for (let i = 1; i <= segments; i++) {
+                  currX += stepX;
+                  currY += stepY;
+                  currZ += stepZ;
+                  currA += stepA;
+                  pushLine(currX, currY, currZ, targetVx, targetVy, targetVz, currA);
+              }
+              return;
+          }
+
           let stepVx = Math.abs(Math.round(targetVx * this.stepsPerMM_X));
           let stepVy = Math.abs(Math.round(targetVy * this.stepsPerMM_Y));
           let stepVz = Math.abs(Math.round(targetVz * this.stepsPerMM_Z));
@@ -667,6 +701,18 @@ class SvgConverter {
               if (relativeXStep !== 0) stepVx = Math.max(1, Math.round(Math.abs(relativeXStep) / duration));
               if (relativeYStep !== 0) stepVy = Math.max(1, Math.round(Math.abs(relativeYStep) / duration));
               if (relativeZStep !== 0) stepVz = Math.max(1, Math.round(Math.abs(relativeZStep) / duration));
+          }
+          
+          let currentMaxSps = Math.max(stepVx || 0, stepVy || 0, stepVz || 0, stepVa || 0);
+          if (currentMaxSps > this.maxSpeed) {
+              const scale = currentMaxSps / this.maxSpeed;
+              duration *= scale;
+              if (duration > 0) {
+                  if (relativeXStep !== 0) stepVx = Math.max(1, Math.round(Math.abs(relativeXStep) / duration));
+                  if (relativeYStep !== 0) stepVy = Math.max(1, Math.round(Math.abs(relativeYStep) / duration));
+                  if (relativeZStep !== 0) stepVz = Math.max(1, Math.round(Math.abs(relativeZStep) / duration));
+                  if (relativeAStep !== 0) stepVa = Math.max(1, Math.round(Math.abs(relativeAStep) / duration));
+              }
           }
           
           let ids = [];

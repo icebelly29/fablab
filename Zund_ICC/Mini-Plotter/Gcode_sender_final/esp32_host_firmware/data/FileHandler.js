@@ -198,9 +198,17 @@ export async function handleFile(file, onGCodeReady, onSwitchTab) {
                 const idZ = parseInt(document.getElementById('zRs485Id')?.value) || 1;
                 const idA = parseInt(document.getElementById('aRs485Id')?.value) || 4;
 
+                const maxStepsInput = document.getElementById('maxStepsInput');
+                const maxSteps = maxStepsInput ? parseInt(maxStepsInput.value) : 30000;
+                
+                const maxSpeedInput = document.getElementById('maxSpeedInput');
+                const maxSpeed = maxSpeedInput ? parseInt(maxSpeedInput.value) : 30000;
+
                 // Run the conversion!
                 const converter = new SvgConverter({
                     feedRate: cuttingSpeed, 
+                    maxSteps: maxSteps,
+                    maxSpeed: maxSpeed,
                     scale: scale,
                     offsetX: finalOffsetX,
                     offsetY: finalOffsetY,

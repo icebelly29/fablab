@@ -261,6 +261,44 @@ function handleManualSend() {
 // Wire up the manual input buttons/keys
 document.getElementById('btnClear').addEventListener('click', clearConsole);
 document.getElementById('btnRun').addEventListener('click', handleManualSend);
+
+// Quick Actions
+const btnToggleMotors = document.getElementById('btnToggleMotors');
+if (btnToggleMotors) {
+    btnToggleMotors.addEventListener('click', () => {
+        const isEnabled = btnToggleMotors.dataset.enabled === 'true';
+        if (isEnabled) {
+            connection.send('enable all 0', true);
+            btnToggleMotors.dataset.enabled = 'false';
+            btnToggleMotors.textContent = 'Enable Motors';
+        } else {
+            connection.send('enable all 1', true);
+            btnToggleMotors.dataset.enabled = 'true';
+            btnToggleMotors.textContent = 'Disable Motors';
+        }
+    });
+}
+
+const btnPingAll = document.getElementById('btnPingAll');
+if (btnPingAll) {
+    btnPingAll.addEventListener('click', () => {
+        connection.send('ping all', true);
+    });
+}
+
+const btnPingNode = document.getElementById('btnPingNode');
+const pingNodeId = document.getElementById('pingNodeId');
+if (btnPingNode && pingNodeId) {
+    btnPingNode.addEventListener('click', () => {
+        const id = pingNodeId.value.trim();
+        if (id) {
+            connection.send(`ping ${id}`, true);
+        } else {
+            log('Please enter a Node ID to ping.', 'error');
+        }
+    });
+}
+
 cmdInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         handleManualSend();
@@ -365,9 +403,24 @@ segmentLengthInput.addEventListener('input', (e) => { segmentLengthSlider.value 
 cuttingSpeedSlider.addEventListener('input', (e) => { cuttingSpeedInput.value = e.target.value; });
 cuttingSpeedInput.addEventListener('input', (e) => { cuttingSpeedSlider.value = e.target.value; });
 
+const maxStepsSlider = document.getElementById('maxStepsSlider');
+const maxStepsInput = document.getElementById('maxStepsInput');
+const maxSpeedSlider = document.getElementById('maxSpeedSlider');
+const maxSpeedInput = document.getElementById('maxSpeedInput');
+
+if (maxStepsSlider && maxStepsInput) {
+    maxStepsSlider.addEventListener('input', (e) => { maxStepsInput.value = e.target.value; });
+    maxStepsInput.addEventListener('input', (e) => { maxStepsSlider.value = e.target.value; });
+}
+if (maxSpeedSlider && maxSpeedInput) {
+    maxSpeedSlider.addEventListener('input', (e) => { maxSpeedInput.value = e.target.value; });
+    maxSpeedInput.addEventListener('input', (e) => { maxSpeedSlider.value = e.target.value; });
+}
+
 // Watch all config inputs for changes
 [
     segmentLengthSlider, segmentLengthInput, cuttingSpeedSlider, cuttingSpeedInput,
+    maxStepsSlider, maxStepsInput, maxSpeedSlider, maxSpeedInput,
     'xRs485Id','xMotorSteps','xMicrosteps','xMmPerRev',
     'yRs485Id','yMotorSteps','yMicrosteps','yMmPerRev',
     'zRs485Id','zMotorSteps','zMicrosteps','zMmPerRev',
