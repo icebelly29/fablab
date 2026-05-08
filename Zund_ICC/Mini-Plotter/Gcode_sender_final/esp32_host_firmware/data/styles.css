@@ -319,7 +319,7 @@ main {
 .axis-calc { font-size: 0.72rem; font-weight: 400; color: #4ade80; letter-spacing: 0; text-transform: none; }
 .axis-row {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
     gap: 0.5rem;
 }
 .axis-cell {

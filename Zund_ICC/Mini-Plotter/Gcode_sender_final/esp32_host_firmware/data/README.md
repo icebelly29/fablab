@@ -71,15 +71,21 @@ The engine generates data mapped strictly to **Steps** and pure **Integers** (no
 
 The very first line sent is always `enable all 1` to engage the stepper drivers. Every subsequent line follows this format:
 
-`xyz X Y Z Vx Vy Vz Angle`
+`move <count> <RS485 IDs> <steps> <SPS>`
 
-- **xyz**: The required prefix identifier.
+**Example:** `move 4 3 2 1 4 10 10 10 10 500 500 500 500`
+
+- `move`: Command identifier.
+- `<count>`: Number of motors moving in this segment.
+- `<RS485 IDs>`: Space-separated list of motor IDs (e.g. `3 2 1 4`).
+- `<steps>`: Signed relative steps for each motor.
+- `<SPS>`: Steps-Per-Second (velocity) for each motor, calculated to ensure synchronous arrival.
+
+- **xyz**: The required prefix identifier. (Legacy, now replaced by `move`)
 - **X, Y**: The *Relative* change in target coordinates (in Steps).
 - **Z**: The *Relative* change in Z Steps (e.g. `6400` to plunge, `-6400` to lift).
 - **Vx, Vy, Vz**: The normalized velocity vector in Steps/sec.
 - **Angle**: The *Relative* change in Tangential Knife angle (in Steps, calculated from Steps per Degree).
-
-*(Example: `xyz 1024 1024 6400 1200 400 0 45`)*
 
 ---
 
@@ -87,6 +93,6 @@ The very first line sent is always `enable all 1` to engage the stepper drivers.
 
 | Command | Description | Format |
 | :--- | :--- | :--- |
-| **xyz** | Trajectory segment / Manual Jog | `xyz <dx> <dy> <dz> <vx> <vy> <vz> <da>` |
+| **move** | Trajectory segment / Manual Jog | `move <count> <ids...> <steps...> <sps...>` |
 | **home** | Move all axes to zero | `home` |
 | **enable** | Enable/Disable motors | `enable all <0/1>` |

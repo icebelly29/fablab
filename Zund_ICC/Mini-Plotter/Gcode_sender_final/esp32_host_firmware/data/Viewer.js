@@ -77,11 +77,61 @@ export function renderGCode(gcode, canvasId = 'gcodeCanvas', containerId = 'canv
         if (!line) return;
 
         // --- NEW: Trajectory Format ---
-        // Format: X Y Z Vx Vy Vz Angle (Space or Comma separated)
-        if (!line.startsWith('G') && !line.startsWith('M') && (line.includes(',') || line.includes(' '))) {
-            if (line.startsWith('X Y Z') || line.startsWith('XYZ X Y Z')) return; // Skip Header
+        // Format: move <count> <ids...> <steps...> <sps...>
+        const isMoveCommand = line.toLowerCase().startsWith('move');
+        if (isMoveCommand || (!line.startsWith('G') && !line.startsWith('M') && (line.includes(',') || line.includes(' ')))) {
+            if (line.startsWith('X Y Z') || line.startsWith('XYZ X Y Z') || line.startsWith('ENABLE')) return; // Skip Header/Commands
 
             const parts = line.split(/[\s,]+/);
+            
+            if (parts.length > 0 && parts[0].toLowerCase() === 'move') {
+                const count = parseInt(parts[1]);
+                if (isNaN(count) || parts.length < 2 + count * 2) return;
+                
+                // Get configured IDs to map back to axes
+                const idX = parseInt(document.getElementById('xRs485Id')?.value) || 3;
+                const idY = parseInt(document.getElementById('yRs485Id')?.value) || 2;
+                const idZ = parseInt(document.getElementById('zRs485Id')?.value) || 1;
+                
+                // Get Steps/MM to convert back to physical millimeters for the canvas
+                const axisSteps = (mId, miId, dId, fallback) => {
+                    const m  = parseFloat(document.getElementById(mId)?.value)  || 200;
+                    const mi = parseFloat(document.getElementById(miId)?.value) || 1;
+                    const d  = parseFloat(document.getElementById(dId)?.value)  || 1;
+                    const v  = (m * mi) / d;
+                    return (isNaN(v) || v <= 0) ? fallback : v;
+                };
+
+                const stepsPerMM_X = axisSteps('xMotorSteps','xMicrosteps','xMmPerRev', 160);
+                const stepsPerMM_Y = axisSteps('yMotorSteps','yMicrosteps','yMmPerRev', 160);
+
+                let dx = 0, dy = 0, zVal = 0;
+                
+                for (let i = 0; i < count; i++) {
+                    const id = parseInt(parts[2 + i]);
+                    const steps = parseInt(parts[2 + count + i]);
+                    
+                    if (id === idX) dx = steps / stepsPerMM_X;
+                    else if (id === idY) dy = steps / stepsPerMM_Y;
+                    else if (id === idZ) zVal = steps;
+                }
+                
+                if (zVal > 0) isPenDown = true;  // Positive Z means moving Down
+                else if (zVal < 0) isPenDown = false; // Negative Z means moving Up
+                
+                const isMove = !isPenDown;
+                const next = { x: cur.x + dx, y: cur.y + dy };
+                
+                paths.push({
+                    type: isMove ? 'move' : 'cut',
+                    from: { ...cur },
+                    to: { ...next }
+                });
+                cur = next;
+                return;
+            }
+
+            // Legacy fallback
             if (parts.length > 0 && parts[0].toUpperCase() === 'XYZ') {
                 parts.shift(); // Remove the "xyz" prefix
             }

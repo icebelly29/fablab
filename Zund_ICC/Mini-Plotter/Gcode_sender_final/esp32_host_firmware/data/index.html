@@ -186,6 +186,10 @@
                 <div class="axis-group-label">X-Axis &nbsp;<span class="axis-calc" id="xStepsLabel"></span></div>
                 <div class="axis-row">
                     <div class="axis-cell">
+                        <input type="number" id="xRs485Id" value="3" step="1" min="1" max="255">
+                        <span>RS485 ID</span>
+                    </div>
+                    <div class="axis-cell">
                         <input type="number" id="xMotorSteps" value="200" step="1" min="1">
                         <span>Steps/Rev</span>
                     </div>
@@ -203,6 +207,10 @@
             <div class="axis-group">
                 <div class="axis-group-label">Y-Axis &nbsp;<span class="axis-calc" id="yStepsLabel"></span></div>
                 <div class="axis-row">
+                    <div class="axis-cell">
+                        <input type="number" id="yRs485Id" value="2" step="1" min="1" max="255">
+                        <span>RS485 ID</span>
+                    </div>
                     <div class="axis-cell">
                         <input type="number" id="yMotorSteps" value="200" step="1" min="1">
                         <span>Steps/Rev</span>
@@ -222,6 +230,10 @@
                 <div class="axis-group-label">Z-Axis &nbsp;<span class="axis-calc" id="zStepsLabel"></span></div>
                 <div class="axis-row">
                     <div class="axis-cell">
+                        <input type="number" id="zRs485Id" value="1" step="1" min="1" max="255">
+                        <span>RS485 ID</span>
+                    </div>
+                    <div class="axis-cell">
                         <input type="number" id="zMotorSteps" value="200" step="1" min="1">
                         <span>Steps/Rev</span>
                     </div>
@@ -239,6 +251,10 @@
             <div class="axis-group">
                 <div class="axis-group-label">Rotary (A) &nbsp;<span class="axis-calc" id="aStepsLabel"></span></div>
                 <div class="axis-row">
+                    <div class="axis-cell">
+                        <input type="number" id="aRs485Id" value="4" step="1" min="1" max="255">
+                        <span>RS485 ID</span>
+                    </div>
                     <div class="axis-cell">
                         <input type="number" id="aMotorSteps" value="200" step="1" min="1">
                         <span>Steps/Rev</span>

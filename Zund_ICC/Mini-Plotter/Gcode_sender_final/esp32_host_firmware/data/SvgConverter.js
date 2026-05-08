@@ -203,6 +203,11 @@ class SvgConverter {
     this.stepsPerMM_Z = options.stepsPerMM_Z || 80.0;
     this.stepsPerDeg_A = options.stepsPerDeg_A || 8.88;
     
+    this.idX = options.idX !== undefined ? options.idX : 3;
+    this.idY = options.idY !== undefined ? options.idY : 2;
+    this.idZ = options.idZ !== undefined ? options.idZ : 1;
+    this.idA = options.idA !== undefined ? options.idA : 4;
+    
     // Z-Axis Config (mm initially, then scaled to steps)
     this.zUp = options.zUp !== undefined ? options.zUp : 5;
     this.zDown = options.zDown !== undefined ? options.zDown : 0;
@@ -636,9 +641,9 @@ class SvgConverter {
           // Angle delta
           const relativeAStep = Math.round((targetAngle - state.machineA) * this.stepsPerDeg_A);
           
-          const stepVx = Math.abs(Math.round(targetVx * this.stepsPerMM_X));
-          const stepVy = Math.abs(Math.round(targetVy * this.stepsPerMM_Y));
-          const stepVz = Math.abs(Math.round(targetVz * this.stepsPerMM_Z));
+          let stepVx = Math.abs(Math.round(targetVx * this.stepsPerMM_X));
+          let stepVy = Math.abs(Math.round(targetVy * this.stepsPerMM_Y));
+          let stepVz = Math.abs(Math.round(targetVz * this.stepsPerMM_Z));
           
           // If there is no movement at all, don't emit the line (but update state)
           if (relativeXStep === 0 && relativeYStep === 0 && relativeZStep === 0 && relativeAStep === 0) {
@@ -649,7 +654,44 @@ class SvgConverter {
               return;
           }
           
-          data.push(`xyz ${relativeXStep} ${relativeYStep} ${relativeZStep} ${stepVx} ${stepVy} ${stepVz} ${relativeAStep}`);
+          // Calculate duration to ensure all nodes arrive simultaneously
+          let duration = 0;
+          if (stepVx > 0 && relativeXStep !== 0) duration = Math.abs(relativeXStep) / stepVx;
+          else if (stepVy > 0 && relativeYStep !== 0) duration = Math.abs(relativeYStep) / stepVy;
+          else if (stepVz > 0 && relativeZStep !== 0) duration = Math.abs(relativeZStep) / stepVz;
+
+          let stepVa = 0;
+          if (relativeAStep !== 0) {
+              if (duration > 0) {
+                  stepVa = Math.abs(relativeAStep) / duration;
+              } else {
+                  // Pure rotation
+                  stepVa = this.stepsPerDeg_A * 360; // default 360 deg/sec
+                  duration = Math.abs(relativeAStep) / stepVa;
+              }
+              stepVa = Math.max(1, Math.round(stepVa));
+          }
+
+          // Re-calculate sps for X, Y, Z to ensure perfect synchronization
+          if (duration > 0) {
+              if (relativeXStep !== 0) stepVx = Math.max(1, Math.round(Math.abs(relativeXStep) / duration));
+              if (relativeYStep !== 0) stepVy = Math.max(1, Math.round(Math.abs(relativeYStep) / duration));
+              if (relativeZStep !== 0) stepVz = Math.max(1, Math.round(Math.abs(relativeZStep) / duration));
+          }
+          
+          let ids = [];
+          let steps = [];
+          let sps = [];
+          
+          if (relativeXStep !== 0) { ids.push(this.idX); steps.push(relativeXStep); sps.push(stepVx); }
+          if (relativeYStep !== 0) { ids.push(this.idY); steps.push(relativeYStep); sps.push(stepVy); }
+          if (relativeZStep !== 0) { ids.push(this.idZ); steps.push(relativeZStep); sps.push(stepVz); }
+          if (relativeAStep !== 0) { ids.push(this.idA); steps.push(relativeAStep); sps.push(stepVa); }
+          
+          if (ids.length > 0) {
+              const cmd = `move ${ids.length} ${ids.join(' ')} ${steps.join(' ')} ${sps.join(' ')}`;
+              data.push(cmd);
+          }
           
           state.machineX = targetX;
           state.machineY = targetY;

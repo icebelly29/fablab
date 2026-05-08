@@ -131,29 +131,30 @@ function startJob() {
     // --- SAFE RETRACT INJECTION ---
     // If the machine was stopped mid-job, it might still have the pen down.
     // We inject a pure vertical lift at its last known position before starting.
-    if (state.wasInterrupted && state.lastSentCmd) {
-        const parts = state.lastSentCmd.split(/[\s,]+/);
-        if (parts.length >= 8 && parts[0].toLowerCase() === 'xyz') {
-            const lastX = parts[1];
-            const lastY = parts[2];
-            const lastAngle = parts[7];
-            
-            // Calculate Z stepsPerMM from per-axis inputs
-            const zMotorSteps = parseFloat(document.getElementById('zMotorSteps')?.value) || 200;
-            const zMicrosteps = parseFloat(document.getElementById('zMicrosteps')?.value) || 32;
-            const zMmPerRev   = parseFloat(document.getElementById('zMmPerRev')?.value)   || 8;
-            const zStepsPerMM = (zMotorSteps * zMicrosteps) / zMmPerRev || 80;
+    if (state.wasInterrupted) {
+        // Calculate Z stepsPerMM from per-axis inputs
+        const zMotorSteps = parseFloat(document.getElementById('zMotorSteps')?.value) || 200;
+        const zMicrosteps = parseFloat(document.getElementById('zMicrosteps')?.value) || 32;
+        const zMmPerRev   = parseFloat(document.getElementById('zMmPerRev')?.value)   || 8;
+        const zStepsPerMM = (zMotorSteps * zMicrosteps) / zMmPerRev || 80;
 
-            // Assume zUp is 5mm, scaled to steps
-            const zUpStep = Math.round(5 * zStepsPerMM);
-            
-            // Inject a pure vertical lift at the exact last known location
-            // Negative Z means "Up" in the relative coordinate system
-            const retractCmd = `xyz ${lastX} ${lastY} -${zUpStep} 0 0 0 ${lastAngle}`;
-            
-            state.gcodeQueue.unshift(retractCmd);
-            log(`Injected Safe Retract at X:${lastX} Y:${lastY}`, 'info');
-        }
+        // Assume zUp is 5mm, scaled to steps
+        const zUpStep = Math.round(5 * zStepsPerMM);
+        
+        // Z-axis RS485 ID
+        const idZ = parseInt(document.getElementById('zRs485Id')?.value) || 1;
+        
+        // Default Z lift speed
+        const cuttingSpeedInput = document.getElementById('cuttingSpeedInput');
+        const feedRate = cuttingSpeedInput ? parseFloat(cuttingSpeedInput.value) : 30;
+        const stepVz = Math.abs(Math.round(feedRate * zStepsPerMM));
+        
+        // Inject a pure vertical lift
+        // Negative Z means "Up" in the relative coordinate system
+        const retractCmd = `move 1 ${idZ} -${zUpStep} ${stepVz}`;
+        
+        state.gcodeQueue.unshift(retractCmd);
+        log(`Injected Safe Retract (Z-Up)`, 'info');
     }
     
     state.wasInterrupted = false;
@@ -203,7 +204,7 @@ function sendNextLine() {
         state.currentLine = state.gcodeQueue.shift(); // Remove first item from array
         
         // Track the last physical position sent
-        if (state.currentLine.toLowerCase().startsWith('xyz') && !state.currentLine.includes('X Y Z')) {
+        if (state.currentLine.toLowerCase().startsWith('move')) {
             state.lastSentCmd = state.currentLine;
         }
 
@@ -367,10 +368,10 @@ cuttingSpeedInput.addEventListener('input', (e) => { cuttingSpeedSlider.value = 
 // Watch all config inputs for changes
 [
     segmentLengthSlider, segmentLengthInput, cuttingSpeedSlider, cuttingSpeedInput,
-    'xMotorSteps','xMicrosteps','xMmPerRev',
-    'yMotorSteps','yMicrosteps','yMmPerRev',
-    'zMotorSteps','zMicrosteps','zMmPerRev',
-    'aMotorSteps','aMicrosteps','aDegPerRev',
+    'xRs485Id','xMotorSteps','xMicrosteps','xMmPerRev',
+    'yRs485Id','yMotorSteps','yMicrosteps','yMmPerRev',
+    'zRs485Id','zMotorSteps','zMicrosteps','zMmPerRev',
+    'aRs485Id','aMotorSteps','aMicrosteps','aDegPerRev',
 ].forEach(idOrEl => {
     const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
     if (el) {
@@ -497,6 +498,12 @@ function sendJog(dx, dy, dz, da = 0) {
     const aStepsPerDeg = getAxisSteps('aMotorSteps', 'aMicrosteps', 'aDegPerRev', 8.88);
     const feedRate     = parseFloat(document.getElementById('cuttingSpeedInput')?.value) || 30;
 
+    // Get RS485 IDs
+    const idX = parseInt(document.getElementById('xRs485Id')?.value) || 3;
+    const idY = parseInt(document.getElementById('yRs485Id')?.value) || 2;
+    const idZ = parseInt(document.getElementById('zRs485Id')?.value) || 1;
+    const idA = parseInt(document.getElementById('aRs485Id')?.value) || 4;
+
     // 2. Calculate relative steps
     // Note: Z-axis convention is positive for DOWN, so we negate dz (Up is positive)
     const relX = Math.round(dx * xStepsPerMM);
@@ -504,13 +511,47 @@ function sendJog(dx, dy, dz, da = 0) {
     const relZ = Math.round(-dz * zStepsPerMM);
     const relA = Math.round(da * aStepsPerDeg);
 
-    // 3. Calculate velocities in steps/sec (absolute)
-    const vx = dx !== 0 ? Math.abs(Math.round(feedRate * xStepsPerMM)) : 0;
-    const vy = dy !== 0 ? Math.abs(Math.round(feedRate * yStepsPerMM)) : 0;
-    const vz = dz !== 0 ? Math.abs(Math.round(feedRate * zStepsPerMM)) : 0;
+    if (relX === 0 && relY === 0 && relZ === 0 && relA === 0) return;
 
-    // 4. Build command string: "xyz <dx> <dy> <dz> <vx> <vy> <vz> <da>"
-    const cmd = `xyz ${relX} ${relY} ${relZ} ${vx} ${vy} ${vz} ${relA}`;
+    // 3. Calculate velocities in steps/sec (absolute)
+    let stepVx = Math.abs(Math.round(feedRate * xStepsPerMM));
+    let stepVy = Math.abs(Math.round(feedRate * yStepsPerMM));
+    let stepVz = Math.abs(Math.round(feedRate * zStepsPerMM));
+
+    // Calculate duration for synchronous motion
+    let duration = 0;
+    if (stepVx > 0 && relX !== 0) duration = Math.abs(relX) / stepVx;
+    else if (stepVy > 0 && relY !== 0) duration = Math.abs(relY) / stepVy;
+    else if (stepVz > 0 && relZ !== 0) duration = Math.abs(relZ) / stepVz;
+
+    let stepVa = 0;
+    if (relA !== 0) {
+        if (duration > 0) {
+            stepVa = Math.abs(relA) / duration;
+        } else {
+            stepVa = aStepsPerDeg * 360; 
+            duration = Math.abs(relA) / stepVa;
+        }
+        stepVa = Math.max(1, Math.round(stepVa));
+    }
+
+    if (duration > 0) {
+        if (relX !== 0) stepVx = Math.max(1, Math.round(Math.abs(relX) / duration));
+        if (relY !== 0) stepVy = Math.max(1, Math.round(Math.abs(relY) / duration));
+        if (relZ !== 0) stepVz = Math.max(1, Math.round(Math.abs(relZ) / duration));
+    }
+
+    let ids = [];
+    let steps = [];
+    let sps = [];
+    
+    if (relX !== 0) { ids.push(idX); steps.push(relX); sps.push(stepVx); }
+    if (relY !== 0) { ids.push(idY); steps.push(relY); sps.push(stepVy); }
+    if (relZ !== 0) { ids.push(idZ); steps.push(relZ); sps.push(stepVz); }
+    if (relA !== 0) { ids.push(idA); steps.push(relA); sps.push(stepVa); }
+
+    // 4. Build command string: "move <count> <ids> <steps> <sps>"
+    const cmd = `move ${ids.length} ${ids.join(' ')} ${steps.join(' ')} ${sps.join(' ')}`;
     connection.send(cmd, true);
 
     // Update local dead-reckoning position display (in mm/deg)

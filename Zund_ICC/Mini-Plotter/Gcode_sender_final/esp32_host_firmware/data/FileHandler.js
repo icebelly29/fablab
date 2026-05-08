@@ -193,6 +193,11 @@ export async function handleFile(file, onGCodeReady, onSwitchTab) {
                 const cuttingSpeedInput = document.getElementById('cuttingSpeedInput');
                 const cuttingSpeed = cuttingSpeedInput ? parseFloat(cuttingSpeedInput.value) : 30;
 
+                const idX = parseInt(document.getElementById('xRs485Id')?.value) || 3;
+                const idY = parseInt(document.getElementById('yRs485Id')?.value) || 2;
+                const idZ = parseInt(document.getElementById('zRs485Id')?.value) || 1;
+                const idA = parseInt(document.getElementById('aRs485Id')?.value) || 4;
+
                 // Run the conversion!
                 const converter = new SvgConverter({
                     feedRate: cuttingSpeed, 
@@ -204,6 +209,10 @@ export async function handleFile(file, onGCodeReady, onSwitchTab) {
                     stepsPerMM_Y: stepsPerMM_Y,
                     stepsPerMM_Z: stepsPerMM_Z,
                     stepsPerDeg_A: stepsPerDeg_A,
+                    idX: idX,
+                    idY: idY,
+                    idZ: idZ,
+                    idA: idA,
                     flipY: true
                 });
                 const gcode = converter.convert(text);
