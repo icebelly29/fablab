@@ -62,7 +62,8 @@ const state = {
     lastSentCmd: null,   // Tracks the last sent trajectory line
     currentLine: null,   // Tracks the exact string currently being sent
     wasInterrupted: false, // Flags if the job was stopped midway
-    isWaitingForReady: false // Flag to wait for Pico's "ready" when buffer is full
+    isWaitingForReady: false, // Flag to wait for Pico's "ready" when buffer is full
+    resendTimeout: null  // Tracks the timeout for resending commands to prevent spam
 };
 
 // --- DOM Elements ---
@@ -98,8 +99,16 @@ const connection = new MachineConnection({
     // When the machine is ready after a buffer full, resume sending
     onReady: () => {
         if (state.isSending && state.isWaitingForReady && state.currentLine) {
-            state.isWaitingForReady = false;
-            connection.send(state.currentLine);
+            if (state.resendTimeout) return;
+            // Delay sending by 250ms to allow the Pico buffer to actually process and clear slots,
+            // preventing a spammy infinite 'nope' / 'ready' loop.
+            state.resendTimeout = setTimeout(() => {
+                state.resendTimeout = null;
+                if (state.isSending && state.isWaitingForReady) {
+                    state.isWaitingForReady = false;
+                    connection.send(state.currentLine);
+                }
+            }, 250);
         }
     },
     
@@ -179,6 +188,10 @@ function stopJob() {
     state.isSending = false;
     state.gcodeQueue = []; // Delete all remaining commands
     state.wasInterrupted = true; // Mark that it was stopped mid-way
+    if (state.resendTimeout) {
+        clearTimeout(state.resendTimeout);
+        state.resendTimeout = null;
+    }
     
     log('Job Stopped. Position saved for safe retract on restart.', 'error');
     setStartButtonState(false); // Turn button back to Green/Start
