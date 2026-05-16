@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UrumiCam — Macro Gantry Scanner</title>
+    <meta name="description" content="Stop-and-shoot raster scanning system for gantry-based cutting platforms">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ═══════════════════════ HEADER ═══════════════════════ -->
+<header id="appHeader">
+    <div class="header-left">
+        <h1>
+            <span class="logo-icon">◎</span>
+            UrumiCam
+        </h1>
+        <span class="header-subtitle">Macro Scanner</span>
+    </div>
+    <div class="header-right">
+        <div class="state-badge" id="stateBadge">
+            <span class="state-dot"></span>
+            <span id="stateText">IDLE</span>
+        </div>
+    </div>
+</header>
+
+<!-- ═══════════════════════ MAIN LAYOUT ═══════════════════════ -->
+<main id="mainLayout">
+
+    <!-- ─── LEFT PANEL: Tile Grid ─── -->
+    <section class="panel panel-left" id="gridPanel">
+        <div class="panel-header">
+            <span class="panel-title">Scan Grid</span>
+            <div class="panel-actions">
+                <span class="tile-count" id="tileCount">0 / 0</span>
+            </div>
+        </div>
+
+        <!-- Tile Grid Canvas -->
+        <div class="grid-container" id="gridContainer">
+            <canvas id="tileCanvas"></canvas>
+            <div class="grid-empty-state" id="gridEmptyState">
+                <div class="empty-icon">⬚</div>
+                <div class="empty-text">No scan active</div>
+                <div class="empty-subtext">Start a scan to see the tile grid</div>
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-section">
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            <span class="progress-label" id="progressLabel">Ready</span>
+        </div>
+    </section>
+
+    <!-- ─── RIGHT PANEL: Camera + Info ─── -->
+    <section class="panel panel-right" id="infoPanel">
+
+        <!-- Camera Feed -->
+        <div class="camera-section">
+            <div class="camera-feed" id="cameraFeed">
+                <canvas id="cameraCanvas"></canvas>
+                <div class="camera-overlay">
+                    <div class="crosshair crosshair-h"></div>
+                    <div class="crosshair crosshair-v"></div>
+                    <div class="camera-coord" id="cameraCoord">X: 0.00  Y: 0.00</div>
+                    <div class="camera-tile-label" id="cameraTileLabel"></div>
+                </div>
+                <div class="camera-empty" id="cameraEmpty">
+                    <span>📷</span>
+                    <span>Camera Feed</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="controls-section">
+            <!-- Folder Name -->
+            <div class="control-row">
+                <label for="folderName">Scan Folder</label>
+                <input type="text" id="folderName" placeholder="Enter scan name..." autocomplete="off">
+            </div>
+
+            <!-- ROI Definition — capture from current tracked position -->
+            <div class="roi-setup" id="roiSetup">
+                <div class="roi-row">
+                    <button class="btn-mini btn-roi-set" id="btnSetTL">&#128205; Set Top-Left</button>
+                    <div class="roi-coords" id="roiTlDisplay">not set</div>
+                </div>
+                <div class="roi-row">
+                    <button class="btn-mini btn-roi-set" id="btnSetBR">&#128205; Set Bottom-Right</button>
+                    <div class="roi-coords" id="roiBrDisplay">not set</div>
+                </div>
+                <input type="hidden" id="roiTlX"><input type="hidden" id="roiTlY">
+                <input type="hidden" id="roiBrX"><input type="hidden" id="roiBrY">
+            </div>
+
+            <!-- Jog Pad -->
+            <div class="jog-section">
+                <div class="jog-step-row">
+                    <span class="jog-step-label">Step</span>
+                    <div class="jog-step-pills">
+                        <button class="jog-pill" data-step="0.1">0.1</button>
+                        <button class="jog-pill active" data-step="1">1</button>
+                        <button class="jog-pill" data-step="5">5</button>
+                        <button class="jog-pill" data-step="10">10</button>
+                        <span class="jog-step-unit">mm</span>
+                    </div>
+                </div>
+                <div class="jog-pad">
+                    <div class="jog-pad-row">
+                        <button class="jog-btn" id="jogYPlus">&#9650;</button>
+                    </div>
+                    <div class="jog-pad-row jog-mid-row">
+                        <button class="jog-btn" id="jogXMinus">&#9664;</button>
+                        <div class="jog-center">XY</div>
+                        <button class="jog-btn" id="jogXPlus">&#9654;</button>
+                    </div>
+                    <div class="jog-pad-row">
+                        <button class="jog-btn" id="jogYMinus">&#9660;</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Position Display -->
+            <div class="coord-display" id="coordDisplay">
+                <div class="coord-item">
+                    <span class="coord-label">X</span>
+                    <span class="coord-value" id="coordX">0.00</span>
+                    <span class="coord-unit">mm</span>
+                </div>
+                <div class="coord-item">
+                    <span class="coord-label">Y</span>
+                    <span class="coord-value" id="coordY">0.00</span>
+                    <span class="coord-unit">mm</span>
+                </div>
+                <button class="btn-mini btn-zero" id="btnZeroPos" title="Mark current as (0,0)">&#8962; Zero</button>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button class="btn btn-scan" id="btnStartScan">
+                    <span class="btn-icon-text">▶</span> Start Scan
+                </button>
+                <button class="btn btn-abort hidden" id="btnAbortScan">
+                    <span class="btn-icon-text">■</span> Abort
+                </button>
+                <button class="btn btn-stop" id="btnSystemStop" title="Emergency Stop Everything">
+                    <span class="btn-icon-text">🛑</span> STOP
+                </button>
+                <button class="btn btn-secondary" id="btnSettings">
+                    ⚙️ Settings
+                </button>
+            </div>
+        </div>
+
+        <!-- Log Window -->
+        <div class="log-section">
+            <div class="log-header">
+                <span>System Terminal</span>
+                <button class="btn-mini" id="btnClearLog">Clear</button>
+            </div>
+            <div class="log-output" id="logOutput">
+                <div class="log-line log-info">[--:--:--] System initialized</div>
+            </div>
+            <div class="terminal-input-row">
+                <span class="terminal-prompt">&gt;</span>
+                <input type="text" id="terminalInput" placeholder="Send command to Pico..." autocomplete="off" spellcheck="false">
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- ═══════════════════════ ROI CONFIRMATION MODAL ═══════════════════════ -->
+<div id="roiModal" class="modal-overlay hidden">
+    <div class="modal-content glass-panel">
+        <div class="modal-header">
+            <h2>ROI Detection</h2>
+            <button class="btn-close" id="btnCloseRoi">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p id="roiMessage">Workpiece detected. Confirm the highlighted region?</p>
+            <div class="roi-preview" id="roiPreview"></div>
+            <div class="roi-actions">
+                <button class="btn btn-scan" id="btnRoiAccept">✓ Accept</button>
+                <button class="btn btn-secondary" id="btnRoiRescan">↻ Rescan</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════ SETTINGS MODAL ═══════════════════════ -->
+<div id="settingsModal" class="modal-overlay hidden">
+    <div class="modal-content glass-panel settings-panel">
+        <div class="modal-header">
+            <h2>Scanner Settings</h2>
+            <button class="btn-close" id="btnCloseSettings">&times;</button>
+        </div>
+        <div class="modal-body">
+            <!-- Scan Settings -->
+            <div class="settings-group">
+                <h3 class="settings-group-label">Scan Parameters</h3>
+                <div class="setting-row">
+                    <label>Tile FOV X (mm)</label>
+                    <input type="number" id="setTileFovX" value="10.0" step="0.1" min="0.1">
+                </div>
+                <div class="setting-row">
+                    <label>Tile FOV Y (mm)</label>
+                    <input type="number" id="setTileFovY" value="7.5" step="0.1" min="0.1">
+                </div>
+                <div class="setting-row">
+                    <label>Overlap (%)</label>
+                    <input type="number" id="setOverlap" value="28" step="1" min="0" max="80">
+                </div>
+                <div class="setting-row">
+                    <label>ROI Margin (mm)</label>
+                    <input type="number" id="setRoiMargin" value="5.0" step="0.5" min="0">
+                </div>
+                <div class="setting-row">
+                    <label>Max Focus Retries</label>
+                    <input type="number" id="setMaxRetries" value="3" step="1" min="0" max="10">
+                </div>
+                <div class="setting-row">
+                    <label>Multi-body Mode</label>
+                    <label class="toggle">
+                        <input type="checkbox" id="setMultiBody">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <hr class="settings-divider">
+
+            <!-- Motor Settings -->
+            <div class="settings-group">
+                <h3 class="settings-group-label">Motor Configuration</h3>
+                <div class="setting-row">
+                    <label>X Motor RS485 ID</label>
+                    <input type="number" id="setMotorXId" value="3" step="1" min="1" max="255">
+                </div>
+                <div class="setting-row">
+                    <label>Y Motor RS485 ID</label>
+                    <input type="number" id="setMotorYId" value="2" step="1" min="1" max="255">
+                </div>
+                <div class="setting-row">
+                    <label>Steps/mm X</label>
+                    <input type="number" id="setStepsX" value="160" step="1" min="1">
+                </div>
+                <div class="setting-row">
+                    <label>Steps/mm Y</label>
+                    <input type="number" id="setStepsY" value="160" step="1" min="1">
+                </div>
+            </div>
+
+            <hr class="settings-divider">
+
+            <!-- Calibration -->
+            <div class="settings-group">
+                <h3 class="settings-group-label">Calibration</h3>
+                <div class="calibration-buttons">
+                    <button class="btn btn-cal" id="btnCalPixels">📏 Pixels/Step</button>
+                    <button class="btn btn-cal" id="btnCalFov">📐 Tile FOV</button>
+                    <button class="btn btn-cal" id="btnCalFocus">🔍 Focus Baseline</button>
+                    <button class="btn btn-cal" id="btnCalQuiet">📊 Quiescence</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════ POST-SCAN MODAL ═══════════════════════ -->
+<div id="completeModal" class="modal-overlay hidden">
+    <div class="modal-content glass-panel">
+        <div class="modal-header">
+            <h2>✓ Scan Complete</h2>
+        </div>
+        <div class="modal-body" style="text-align: center;">
+            <p id="completeMessage" class="complete-message"></p>
+            <div class="complete-actions">
+                <button class="btn btn-scan" id="btnNewScan">Yes — New Scan</button>
+                <button class="btn btn-secondary" id="btnRetryFailed" style="display:none">↻ Retry Failed Tiles</button>
+                <button class="btn btn-secondary" id="btnDone">No — Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════ SCRIPTS ═══════════════════════ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script src="js/websocket.js"></script>
+<script src="js/log_panel.js"></script>
+<script src="js/state_display.js"></script>
+<script src="js/tile_grid.js"></script>
+<script src="js/camera_feed.js"></script>
+<script src="js/calibration_ui.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
